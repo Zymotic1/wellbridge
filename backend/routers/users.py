@@ -66,6 +66,11 @@ async def update_profile(
 
     try:
         db = get_admin_client()
+        # Auto-provision tenant row (no-op if already exists)
+        db.table("tenants").upsert(
+            {"id": ctx.tenant_id, "owner_user_id": ctx.user_id, "name": ctx.user_id},
+            on_conflict="id",
+        ).execute()
         db.table("patients").upsert(
             {
                 "tenant_id": ctx.tenant_id,
