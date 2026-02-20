@@ -58,9 +58,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static files.
-     * Regex from the Next.js docs for excluding _next internals.
+     * Match all request paths except:
+     *  - _next internals & static assets
+     *  - /api/auth/* (Auth0 handlers set cookies that middleware can strip)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
