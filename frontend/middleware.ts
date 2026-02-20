@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth0";
+import { getSession } from "@auth0/nextjs-auth0/edge";
 
 const CLAIM_NS = "https://wellbridge.app/";
 
