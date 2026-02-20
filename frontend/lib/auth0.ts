@@ -5,9 +5,12 @@
 
 import { initAuth0 } from "@auth0/nextjs-auth0";
 
+const baseURL = process.env.AUTH0_BASE_URL ?? "http://localhost:3000";
+const isProd = baseURL.startsWith("https://");
+
 const auth0 = initAuth0({
   secret: process.env.AUTH0_SECRET!,
-  baseURL: process.env.AUTH0_BASE_URL ?? "http://localhost:3000",
+  baseURL,
   issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL!,
   clientID: process.env.AUTH0_CLIENT_ID!,
   clientSecret: process.env.AUTH0_CLIENT_SECRET!,
@@ -19,6 +22,10 @@ const auth0 = initAuth0({
     // Rolling sessions — refresh on each request
     rollingDuration: 60 * 60 * 24,      // 24 hours
     absoluteDuration: 60 * 60 * 24 * 7, // 7 days max
+    cookie: {
+      sameSite: "lax",
+      secure: isProd,
+    },
   },
 });
 
