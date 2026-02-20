@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
   // Proxy API calls to the FastAPI backend
   async rewrites() {
     return [
