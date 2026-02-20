@@ -104,14 +104,14 @@ export default function AppShell({ children }: AppShellProps) {
             <p className="text-xs font-semibold text-slate-700 truncate">{displayName}</p>
           </div>
         </div>
-        <Link
+        <a
           href="/api/auth/logout"
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400
                      hover:bg-red-50 hover:text-red-500 transition-colors text-xs w-full"
         >
           <LogOut size={14} />
           Sign out
-        </Link>
+        </a>
       </div>
     );
   }
