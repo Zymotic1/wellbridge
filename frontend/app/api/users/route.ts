@@ -21,7 +21,8 @@ export async function GET() {
     });
     const data = await res.json();
     return Response.json(data, { status: res.status });
-  } catch {
+  } catch (err) {
+    console.error("[api/users GET]", err);
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
@@ -40,7 +41,8 @@ export async function PATCH(request: NextRequest) {
     });
     const data = await res.json();
     return Response.json(data, { status: res.status });
-  } catch {
+  } catch (err) {
+    console.error("[api/users PATCH]", err);
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 }

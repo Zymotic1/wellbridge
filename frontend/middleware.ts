@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getSession } from "@auth0/nextjs-auth0/edge";
+import { getSession } from "@/lib/auth0";
 
 const CLAIM_NS = "https://wellbridge.app/";
 
@@ -36,23 +36,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const res = NextResponse.next();
-  const session = await getSession(request, res);
+  try {
+    const res = NextResponse.next();
+    const session = await getSession(request, res);
 
-  if (!session?.user) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("returnTo", pathname);
-    return NextResponse.redirect(loginUrl);
+    if (!session?.user) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("returnTo", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Forward tenant context to Route Handlers and Server Components
+    const tenantId: string = session.user[`${CLAIM_NS}tenant_id`] ?? "";
+    const userId: string = session.user.sub ?? "";
+
+    res.headers.set("x-tenant-id", tenantId);
+    res.headers.set("x-user-id", userId);
+
+    return res;
+  } catch (error) {
+    console.error("[middleware] getSession failed:", error);
+    // Let the request through — route handler will handle auth
+    return NextResponse.next();
   }
-
-  // Forward tenant context to Route Handlers and Server Components
-  const tenantId: string = session.user[`${CLAIM_NS}tenant_id`] ?? "";
-  const userId: string = session.user.sub ?? "";
-
-  res.headers.set("x-tenant-id", tenantId);
-  res.headers.set("x-user-id", userId);
-
-  return res;
 }
 
 export const config = {
