@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+}
+
+@layer utilities {
+  .jargon-term {
+    @apply underline decoration-dotted decoration-blue-500 text-blue-700
+           cursor-help bg-blue-50 rounded px-0.5 transition-colors
+           hover:bg-blue-100;
+  }
+}

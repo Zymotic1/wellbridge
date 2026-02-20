@@ -1,0 +1,26 @@
+import { NextRequest } from "next/server";
+import { getAccessToken } from "@/lib/auth0";
+
+export async function GET(req: NextRequest) {
+  let accessToken: string;
+  try {
+    const t = await getAccessToken();
+    accessToken = t.accessToken!;
+  } catch {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
+  const search = req.nextUrl.searchParams.get("search") ?? "";
+  const backend = process.env.BACKEND_URL ?? "http://localhost:8000";
+
+  const upstream = await fetch(
+    `${backend}/epic/endpoints?search=${encodeURIComponent(search)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  const data = await upstream.json();
+  return new Response(JSON.stringify(data), {
+    status: upstream.status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
