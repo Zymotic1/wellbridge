@@ -1,0 +1,61 @@
+# ==============================================================================
+# WellBridge Backend — Python dependencies
+# Python 3.11+
+#
+# LangChain/LangGraph packages are pinned with >= (not ==) because the ecosystem
+# releases frequently and the packages have tight cross-dependencies that pip
+# must resolve together. After a successful install, run:
+#   pip freeze > requirements.lock
+# to capture the exact resolved set for reproducible deployments.
+# ==============================================================================
+
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.1
+python-multipart>=0.0.9          # For file uploads
+
+# Auth & Security
+PyJWT>=2.8.0
+cryptography>=42.0.0
+httpx>=0.27.0                    # Async HTTP (for JWKS fetching)
+
+# LangGraph + LangChain — use >= so pip can resolve compatible versions
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+
+# OpenAI
+openai>=1.50.0
+
+# Supabase
+supabase>=2.5.0
+
+# Azure Document Intelligence (optional)
+azure-ai-documentintelligence>=1.0.0
+azure-core>=1.30.0
+
+# LlamaParse — multi-format document / image / audio parsing
+# Pinned: llama-parse 0.6.x requires llama-cloud==0.1.46; do not upgrade llama-cloud independently
+llama-parse==0.6.9
+llama-cloud==0.1.46
+
+# Google Calendar
+google-api-python-client>=2.134.0
+google-auth>=2.30.0
+google-auth-oauthlib>=1.2.0
+
+# Date parsing (relative date phrases like "in 3 months")
+python-dateutil>=2.9.0
+
+# Pydantic (settings management)
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Scheduler (weekly CMS + Epic endpoint data sync)
+apscheduler>=3.10.0
+
+# Testing
+pytest>=8.2.0
+pytest-asyncio>=0.23.0

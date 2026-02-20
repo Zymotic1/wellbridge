@@ -1,0 +1,32 @@
+# Secrets
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+backend/venv/
+__pycache__/
+*.pyc
+
+# Build output
+.next/
+frontend/.next/
+frontend/out/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Large data files (download separately on server)
+scripts/DAC_NationalDownloadableFile.csv
+backend/epic_endpoint_DSTU2.json
+
+# Docker volumes
+supabase_data/
+
+# Claude memory (personal)
+.claude/

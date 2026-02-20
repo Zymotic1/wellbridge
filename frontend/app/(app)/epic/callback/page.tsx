@@ -15,7 +15,7 @@
  *   6. On error → show message + link to retry
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 
@@ -30,6 +30,21 @@ interface SyncSummary {
 }
 
 export default function EpicCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 text-slate-600">
+          <Loader2 size={40} className="animate-spin text-brand-500" />
+          <p className="text-lg font-medium">Loading…</p>
+        </div>
+      }
+    >
+      <EpicCallbackInner />
+    </Suspense>
+  );
+}
+
+function EpicCallbackInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [status, setStatus] = useState<Status>("loading");

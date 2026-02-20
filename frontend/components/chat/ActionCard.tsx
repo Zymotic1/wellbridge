@@ -114,10 +114,10 @@ function MedicationModal({ card, onClose }: { card: ActionCardType; onClose: () 
     <Modal title="Medication reminder" onClose={onClose}>
       <div className="space-y-3 mb-4">
         <Row label="Medication" value={String(p.medication ?? "")} />
-        {p.dose         && <Row label="Dose"           value={String(p.dose)} />}
-        {p.frequency    && <Row label="When to take"   value={String(p.frequency)} />}
-        {p.instructions && <Row label="Instructions"   value={String(p.instructions)} />}
-        {p.duration     && <Row label="Duration"       value={String(p.duration)} />}
+        {p.dose         ? <Row label="Dose"           value={String(p.dose)} /> : null}
+        {p.frequency    ? <Row label="When to take"   value={String(p.frequency)} /> : null}
+        {p.instructions ? <Row label="Instructions"   value={String(p.instructions)} /> : null}
+        {p.duration     ? <Row label="Duration"       value={String(p.duration)} /> : null}
       </div>
 
       {/* Calendar actions */}
@@ -205,11 +205,11 @@ function AppointmentModal({ card, onClose }: { card: ActionCardType; onClose: ()
   return (
     <Modal title="Follow-up appointment" onClose={onClose}>
       <div className="space-y-3 mb-4">
-        {p.provider_name    && <Row label="Doctor"    value={String(p.provider_name)} />}
-        {p.specialty        && <Row label="Specialty" value={String(p.specialty)} />}
-        {p.date_or_timeframe && <Row label="When"     value={String(p.date_or_timeframe)} />}
-        {p.location         && <Row label="Location"  value={String(p.location)} />}
-        {p.reason           && <Row label="Reason"    value={String(p.reason)} />}
+        {p.provider_name     ? <Row label="Doctor"    value={String(p.provider_name)} /> : null}
+        {p.specialty         ? <Row label="Specialty" value={String(p.specialty)} /> : null}
+        {p.date_or_timeframe ? <Row label="When"      value={String(p.date_or_timeframe)} /> : null}
+        {p.location          ? <Row label="Location"  value={String(p.location)} /> : null}
+        {p.reason            ? <Row label="Reason"    value={String(p.reason)} /> : null}
       </div>
 
       {/* Calendar actions */}
@@ -260,9 +260,9 @@ function ReferralModal({ card, onClose }: { card: ActionCardType; onClose: () =>
     <Modal title="Referral" onClose={onClose}>
       <div className="space-y-3 mb-4">
         <Row label="Specialist type" value={String(p.specialty ?? "")} />
-        {p.provider_name && <Row label="Referred to" value={String(p.provider_name)} />}
-        {p.reason        && <Row label="Reason"      value={String(p.reason)} />}
-        {p.urgency       && <Row label="Urgency"     value={String(p.urgency)} />}
+        {p.provider_name ? <Row label="Referred to" value={String(p.provider_name)} /> : null}
+        {p.reason        ? <Row label="Reason"      value={String(p.reason)} /> : null}
+        {p.urgency       ? <Row label="Urgency"     value={String(p.urgency)} /> : null}
       </div>
       <p className="text-xs text-slate-500">
         The referring doctor&apos;s office will usually send the referral letter directly.
