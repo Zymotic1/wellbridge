@@ -79,7 +79,7 @@ async def run(state: AgentState) -> dict:
     system_prompt = (
         f"{NOTE_SUMMARIZER_SYSTEM}\n\n"
         f"EXAMPLES:\n{NOTE_SUMMARIZER_EXAMPLES}\n\n"
-        "Return the summary and a list of jargon entries with source note IDs and "
+        "Return JSON with the summary and a list of jargon entries with source note IDs and "
         "the exact source sentence from the note for each term."
     )
 

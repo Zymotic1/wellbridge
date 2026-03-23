@@ -54,7 +54,7 @@ async def run(state: AgentState) -> dict:
     last_message = state["messages"][-1].content
     messages_for_llm.append({
         "role": "user",
-        "content": f"Classify this message: {last_message}",
+        "content": f"Classify this message and respond with JSON: {last_message}",
     })
 
     try:
