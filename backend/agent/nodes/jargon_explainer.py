@@ -57,7 +57,7 @@ async def run(state: AgentState) -> dict:
                 {"role": "user", "content": prompt_content},
             ],
             temperature=0.2,
-            max_tokens=400,
+            max_completion_tokens=400,
         )
         raw = result.choices[0].message.content or ""
         return {"raw_response": raw, "jargon_map": []}

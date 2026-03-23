@@ -230,7 +230,7 @@ async def run(state: AgentState) -> dict:
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
-            max_tokens=1200,
+            max_completion_tokens=1200,
         )
 
         raw = llm_result.choices[0].message.content or ""

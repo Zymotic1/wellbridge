@@ -56,7 +56,7 @@ async def generate_session_title(user_message: str, assistant_response: str) -> 
                 },
             ],
             temperature=0.5,
-            max_tokens=20,
+            max_completion_tokens=20,
         )
         title = (result.choices[0].message.content or "").strip().strip('"\'')
         if title and len(title) <= 60:

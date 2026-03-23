@@ -141,7 +141,7 @@ async def run(state: AgentState) -> dict:
                 {"role": "user", "content": last_message},
             ],
             temperature=0.3,
-            max_tokens=200,
+            max_completion_tokens=200,
         )
         raw_response = response.choices[0].message.content or ""
     except Exception:

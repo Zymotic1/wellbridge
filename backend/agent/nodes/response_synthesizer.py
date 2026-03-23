@@ -125,7 +125,7 @@ async def _merge_texts(agent_texts: list[str]) -> str:
                 {"role": "user", "content": f"Merge these agent outputs into one response:\n\n{combined}"},
             ],
             temperature=0.3,
-            max_tokens=3000,
+            max_completion_tokens=3000,
         )
         return result.choices[0].message.content or combined
     except Exception as exc:

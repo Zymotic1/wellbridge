@@ -251,7 +251,7 @@ async def _supervisor_decide(
             ],
             response_format={"type": "json_object"},
             temperature=0.2,
-            max_tokens=300,
+            max_completion_tokens=300,
         )
 
         raw = result.choices[0].message.content or ""

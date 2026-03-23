@@ -181,7 +181,7 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.2,
-                max_tokens=2500,
+                max_completion_tokens=2500,
             )
             raw = result.choices[0].message.content or ""
             data = json.loads(raw)

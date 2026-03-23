@@ -116,7 +116,7 @@ async def generate_suggested_replies(
                 {"role": "user", "content": context},
             ],
             temperature=0.4,
-            max_tokens=150,
+            max_completion_tokens=150,
             response_format={"type": "json_object"},
         )
 

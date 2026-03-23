@@ -202,7 +202,7 @@ async def run(state: AgentState) -> dict:
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
-            max_tokens=600,
+            max_completion_tokens=600,
         )
 
         raw = result.choices[0].message.content or ""

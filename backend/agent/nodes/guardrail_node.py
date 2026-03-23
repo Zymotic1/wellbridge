@@ -72,7 +72,7 @@ async def _simplify_text(text: str) -> str:
             {"role": "user", "content": text},
         ],
         temperature=0.2,
-        max_tokens=800,
+        max_completion_tokens=800,
     )
     return result.choices[0].message.content or text
 
