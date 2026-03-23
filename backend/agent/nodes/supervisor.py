@@ -37,6 +37,7 @@ from agent.nodes import (
     note_explainer,
     jargon_explainer,
     calendar_tool,
+    medication_info,
     pre_visit_prep,
 )
 from config import get_settings
@@ -56,6 +57,7 @@ AVAILABLE_AGENTS = {
     "note_summarizer":  note_summarizer.run,
     "jargon_explainer": jargon_explainer.run,
     "calendar_tool":    calendar_tool.run,
+    "medication_info":  medication_info.run,
     "pre_visit_prep":   pre_visit_prep.run,
 }
 
@@ -81,6 +83,12 @@ jargon_explainer — Explains a single medical term. Use when the user asks "wha
   [term] mean?".
 
 calendar_tool — Shows upcoming appointments. Use when the user asks about their schedule.
+
+medication_info — Answers general questions about medications using publicly available
+  (FDA-level) information: what a drug is, what it's used for, common side effects,
+  how it's typically taken. Does NOT require the user's records. Use when the user asks
+  "what are the side effects of X?" or "what is X used for?" where the answer is
+  publicly available medical knowledge.
 
 pre_visit_prep — Generates questions for the user to ask at their next doctor visit.
   Use when the user wants to prepare for an appointment.

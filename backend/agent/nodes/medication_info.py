@@ -33,9 +33,11 @@ async def run(state: AgentState) -> dict:
                 {"role": "user", "content": user_query},
             ],
             temperature=0.1,
-            max_completion_tokens=350,
+            max_completion_tokens=1000,
         )
         raw = result.choices[0].message.content or ""
+        if not raw.strip():
+            raise ValueError("Empty response from model")
 
         # Add mandatory disclaimer
         raw += (
