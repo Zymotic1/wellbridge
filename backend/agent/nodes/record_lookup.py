@@ -128,8 +128,17 @@ async def run(state: AgentState) -> dict:
         return {
             "records": [],
             "tool_error": str(exc),
-            "raw_response": "I had trouble retrieving your records. Please try again.",
+            "raw_response": (
+                "I wasn't able to search your records just now. If you have documents "
+                "to share — clinic letters, test results, or discharge notes — you can "
+                "upload them using the paperclip button and I'll help you find what "
+                "you're looking for."
+            ),
             "jargon_map": [],
+            "action_cards": [{"id": "upload_records", "type": "upload",
+                              "label": "Upload a document",
+                              "description": "Share your clinical notes or test results",
+                              "payload": {}}],
         }
 
     # ── No records at all — offer upload ─────────────────────────────────────

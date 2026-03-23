@@ -75,8 +75,18 @@ async def run(state: AgentState) -> dict:
     except Exception as exc:
         return {
             "tool_error": str(exc),
-            "raw_response": "I had trouble retrieving your records. Please try again.",
+            "raw_response": (
+                "I'd love to help you prepare for your appointment. To put together "
+                "the most useful questions, it helps to have your recent visit notes "
+                "or test results on hand.\n\n"
+                "You can upload them using the paperclip button, or just tell me "
+                "what topics you'd like to discuss with your doctor."
+            ),
             "jargon_map": [],
+            "action_cards": [{"id": "upload_records", "type": "upload",
+                              "label": "Upload your visit notes",
+                              "description": "Share notes so I can help you prepare specific questions",
+                              "payload": {}}],
         }
 
     # If no records in DB, build context from conversation history:
@@ -232,6 +242,10 @@ async def run(state: AgentState) -> dict:
     except Exception as exc:
         return {
             "tool_error": str(exc),
-            "raw_response": "I had trouble generating questions. Please try again.",
+            "raw_response": (
+                "I wasn't able to put together your questions just now. "
+                "You can try asking again, or tell me what topics are on your mind "
+                "and I'll help you frame them as questions for your doctor."
+            ),
             "jargon_map": [],
         }

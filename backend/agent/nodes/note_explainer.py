@@ -170,13 +170,42 @@ async def run(state: AgentState) -> dict:
         }
 
     except Exception as exc:
+        # Smart fallback: guide the user based on what we know
+        upload_card: ActionCard = {
+            "id": "upload_records",
+            "type": "upload",
+            "label": "Upload your visit notes",
+            "description": "Photograph or scan your discharge summary, clinic letter, or test results",
+            "payload": {},
+        }
+
+        if records:
+            # We have records but couldn't process them — offer to try with a new upload
+            fallback_msg = (
+                "I can see you have some records on file, but I wasn't able to process "
+                "them just now.\n\n"
+                "If you're asking about a **recent visit**, the notes from that visit "
+                "might not be uploaded yet. You can share them by tapping the paperclip "
+                "button or the upload button below.\n\n"
+                "Or, you can tell me what your doctor said in your own words and I'll "
+                "help you make sense of it."
+            )
+        else:
+            fallback_msg = (
+                "It sounds like you'd like help understanding what your doctor told you — "
+                "that's exactly what I'm here for.\n\n"
+                "To get started, I'll need your visit notes. If you received any "
+                "paperwork — a discharge summary, clinic letter, or printed results — "
+                "you can photograph it and upload it using the paperclip button or the "
+                "button below.\n\n"
+                "If you don't have the paperwork handy, you can also tell me what your "
+                "doctor said in your own words and I'll help explain it."
+            )
+
         return {
             "records": records,
             "tool_error": str(exc),
-            "raw_response": (
-                "I had trouble reading your notes. Please try again, or let me know "
-                "what your doctor told you and I'll do my best to help."
-            ),
+            "raw_response": fallback_msg,
             "jargon_map": [],
-            "action_cards": [],
+            "action_cards": [upload_card],
         }

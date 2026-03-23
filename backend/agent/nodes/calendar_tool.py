@@ -64,6 +64,10 @@ async def run(state: AgentState) -> dict:
         return {
             "appointments": [],
             "tool_error": str(exc),
-            "raw_response": "I had trouble fetching your appointments. Please try again.",
+            "raw_response": (
+                "I wasn't able to check your appointments just now. "
+                "If you have an upcoming visit, you can tell me about it "
+                "and I'll help you keep track of it."
+            ),
             "jargon_map": [],
         }

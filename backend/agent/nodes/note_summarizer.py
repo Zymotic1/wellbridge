@@ -135,9 +135,26 @@ async def run(state: AgentState) -> dict:
         }
 
     except Exception as exc:
+        if records:
+            fallback = (
+                "I wasn't able to summarize your records just now, but they are on file. "
+                "You can try asking me a specific question about them — for example, "
+                "\"What medications am I taking?\" or \"What did my last visit note say?\""
+            )
+        else:
+            fallback = (
+                "I don't have any records on file yet. To get started, you can upload "
+                "your clinical notes, discharge summaries, or test results using the "
+                "paperclip button below. Once I have them, I'll summarize everything "
+                "in plain language."
+            )
         return {
             "records": records,
             "tool_error": str(exc),
-            "raw_response": "I had trouble summarizing your records. Please try again.",
+            "raw_response": fallback,
             "jargon_map": [],
+            "action_cards": [{"id": "upload_records", "type": "upload",
+                              "label": "Upload a document",
+                              "description": "Share your clinical notes, letters, or test results",
+                              "payload": {}}] if not records else [],
         }

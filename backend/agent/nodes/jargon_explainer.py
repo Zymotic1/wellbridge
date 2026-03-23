@@ -65,6 +65,9 @@ async def run(state: AgentState) -> dict:
     except Exception as exc:
         return {
             "tool_error": str(exc),
-            "raw_response": "I had trouble looking that up. Please try again.",
+            "raw_response": (
+                "I wasn't able to look that up just now. Could you try asking again, "
+                "or tell me the specific medical term you'd like explained?"
+            ),
             "jargon_map": [],
         }
