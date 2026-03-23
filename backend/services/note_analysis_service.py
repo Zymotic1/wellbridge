@@ -160,7 +160,7 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
     client = get_openai_client()
     primary_model = settings.openai_model
     # Fallback order: configured model → gpt-4o-mini
-    model_candidates = list(dict.fromkeys([primary_model, "gpt-5.2"]))
+    model_candidates = list(dict.fromkeys([primary_model, "gpt-4o-mini"]))
 
     messages = [
         {"role": "system", "content": ANALYSIS_SYSTEM},
@@ -182,9 +182,13 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.2,
-                max_completion_tokens=2500,
+                max_completion_tokens=4000,
             )
             raw = result.choices[0].message.content or ""
+            if not raw.strip():
+                log.warning("analyze_note: model=%s returned empty content (finish_reason=%s)",
+                            model, result.choices[0].finish_reason)
+                raise ValueError(f"Empty response from {model} (finish_reason={result.choices[0].finish_reason})")
             data = json.loads(raw)
             parsed = NoteAnalysisResult(**data)
             log.info("analyze_note: success with model=%s", model)
@@ -193,8 +197,16 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
             err_str = str(exc)
             log.warning("analyze_note: model=%s failed — %s", model, err_str)
             last_exc = exc
-            # Only retry on access/permission errors; propagate everything else
-            if "model_not_found" not in err_str and "403" not in err_str and "access" not in err_str.lower():
+            # Retry on: access errors, empty responses, JSON parse errors
+            # Propagate other errors immediately (don't waste time retrying)
+            retryable = (
+                "model_not_found" in err_str
+                or "403" in err_str
+                or "access" in err_str.lower()
+                or "empty response" in err_str.lower()
+                or isinstance(exc, (json.JSONDecodeError, ValueError))
+            )
+            if not retryable:
                 raise
 
     raise RuntimeError(
