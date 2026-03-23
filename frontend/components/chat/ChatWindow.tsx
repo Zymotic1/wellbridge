@@ -341,13 +341,6 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
     return matches >= 2;
   }, []);
 
-  /** Upload text as a document (bypasses chat, goes through note analysis). */
-  const uploadTextAsDocument = useCallback(async (text: string) => {
-    const blob = new Blob([text], { type: "text/plain" });
-    const file = new File([blob], "pasted-note.txt", { type: "text/plain" });
-    await handleUpload(file);
-  }, [handleUpload]);
-
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
@@ -600,6 +593,13 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
       setIsStreaming(false);
     }
   }, [sessionId]);
+
+  /** Upload text as a document (bypasses chat, goes through note analysis). */
+  const uploadTextAsDocument = useCallback(async (text: string) => {
+    const blob = new Blob([text], { type: "text/plain" });
+    const file = new File([blob], "pasted-note.txt", { type: "text/plain" });
+    await handleUpload(file);
+  }, [handleUpload]);
 
   return (
     <div className="flex flex-col h-full">

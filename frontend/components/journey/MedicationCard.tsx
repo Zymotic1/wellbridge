@@ -26,6 +26,7 @@ interface MedicationData {
   prescribed_date: string | null;
   discontinued_date: string | null;
   predecessor_id: string | null;
+  created_at?: string;
 }
 
 interface MedicationCardProps {
