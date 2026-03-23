@@ -1,14 +1,13 @@
 """
 Note explainer node — handles NOTE_EXPLANATION intent.
 
-This node enables the core WellBridge value proposition: helping patients
-understand what their doctor told them, without giving advice.
+This node explains the patient's OWN clinical records in plain language.
+It is only reached when the triage determines information_source=patient_records
+(or via the supervisor for complex multi-agent queries).
 
-INTELLIGENCE HIERARCHY:
-  1. If the user asks about something IN their records → explain from records + public info
-  2. If the user asks a general medical knowledge question (side effects, what a drug does)
-     → answer from publicly available (FDA-level) information, even without records
-  3. If the user asks about a specific visit but has no records → guide them to upload
+Public knowledge questions (medication side effects, condition explanations, etc.)
+are now routed to the public_knowledge node by the triage — this node no longer
+needs to handle them.
 
 This node NEVER:
   - Gives advice: "you should take X", "I recommend Y"
@@ -24,7 +23,7 @@ from services.openai_client import get_openai_client
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping, ActionCard
-from agent.prompts import NOTE_EXPLANATION_SYSTEM, NOTE_EXPLANATION_EXAMPLES, MEDICATION_INFO_SYSTEM
+from agent.prompts import NOTE_EXPLANATION_SYSTEM, NOTE_EXPLANATION_EXAMPLES
 from services.supabase_client import get_admin_client
 from middleware.tenant import TenantContext
 from config import get_settings
@@ -43,21 +42,6 @@ class JargonEntry(BaseModel):
 class ExplanationResult(BaseModel):
     response: str
     jargon_entries: list[JargonEntry]
-
-
-# Patterns that indicate a public-knowledge question (doesn't require records)
-import re
-_PUBLIC_KNOWLEDGE_PATTERNS = [
-    re.compile(r"\b(?:what\s+(?:is|are)|tell\s+me\s+about)\b.*\b(?:side\s+effects?|used\s+for|medication|drug|medicine)\b", re.I),
-    re.compile(r"\b(?:side\s+effects?|common\s+effects?)\s+(?:of|for)\b", re.I),
-    re.compile(r"\b(?:what\s+does|what\s+is)\b.*\b(?:do|treat|for|used)\b", re.I),
-    re.compile(r"\b(?:how\s+does)\b.*\b(?:work|help)\b", re.I),
-]
-
-
-def _is_public_knowledge_question(message: str) -> bool:
-    """Detect if the question can be answered from public FDA-level info."""
-    return any(p.search(message) for p in _PUBLIC_KNOWLEDGE_PATTERNS)
 
 
 async def run(state: AgentState) -> dict:
@@ -81,11 +65,8 @@ async def run(state: AgentState) -> dict:
     except Exception:
         records = []
 
-    # ── No records: check if it's a public knowledge question ─────────────
+    # ── No records — guide them to upload ─────────────────────────────────
     if not records:
-        if _is_public_knowledge_question(user_message):
-            return await _answer_from_public_knowledge(client, user_message)
-
         upload_card: ActionCard = {
             "id": "upload_records",
             "type": "upload",
@@ -124,7 +105,7 @@ async def run(state: AgentState) -> dict:
         "the exact source sentence from the note for each medical term you explained."
     )
 
-    # ── LLM call with records ────────────────────────────────────────────────
+    # ── Primary LLM call ────────────────────────────────────────────────────
     try:
         result = await client.chat.completions.create(
             model=settings.openai_model,
@@ -147,7 +128,6 @@ async def run(state: AgentState) -> dict:
         if not raw.strip():
             raise ValueError(f"Empty response (finish_reason={result.choices[0].finish_reason})")
         parsed = ExplanationResult(**_json.loads(raw))
-
         response_text = parsed.response
 
         # ── Build jargon_map with character offsets ──────────────────────────
@@ -176,12 +156,7 @@ async def run(state: AgentState) -> dict:
     except Exception as exc:
         log.warning("note_explainer: LLM call failed — %s", exc)
 
-        # ── Intelligent fallback: try answering from public knowledge ────────
-        if _is_public_knowledge_question(user_message):
-            log.info("note_explainer: falling back to public knowledge for medication question")
-            return await _answer_from_public_knowledge(client, user_message, records=records)
-
-        # ── Last resort: guide the user ──────────────────────────────────────
+        # Smart fallback: show what records we have and offer guidance
         upload_card: ActionCard = {
             "id": "upload_records",
             "type": "upload",
@@ -190,23 +165,20 @@ async def run(state: AgentState) -> dict:
             "payload": {},
         }
 
-        if records:
-            fallback_msg = (
-                "I can see you have some records on file, but I wasn't able to process "
-                "them just now.\n\n"
-                "If you're asking about a **recent visit**, the notes from that visit "
-                "might not be uploaded yet. You can share them by tapping the paperclip "
-                "button or the upload button below.\n\n"
-                "Or, you can tell me what your doctor said in your own words and I'll "
-                "help you make sense of it."
-            )
-        else:
-            fallback_msg = (
-                "It sounds like you'd like help understanding what your doctor told you — "
-                "that's exactly what I'm here for.\n\n"
-                "To get started, I'll need your visit notes. You can upload them using "
-                "the paperclip button or the button below."
-            )
+        # Build a helpful summary of available records
+        record_summary = "\n".join(
+            f"• {r.get('provider_name', 'Document')} ({r.get('record_type', 'note')}, "
+            f"{str(r.get('note_date', ''))[:10]})"
+            for r in records[:5]
+        )
+
+        fallback_msg = (
+            f"I can see you have these records on file:\n{record_summary}\n\n"
+            "I wasn't able to process them right now. You can try:\n"
+            "• Asking a more specific question, like \"What medications are listed in my notes?\"\n"
+            "• Uploading a new document if you're asking about a recent visit\n"
+            "• Telling me what your doctor said in your own words"
+        )
 
         return {
             "records": records,
@@ -214,63 +186,4 @@ async def run(state: AgentState) -> dict:
             "raw_response": fallback_msg,
             "jargon_map": [],
             "action_cards": [upload_card],
-        }
-
-
-async def _answer_from_public_knowledge(
-    client: AsyncOpenAI,
-    user_message: str,
-    records: list[dict] | None = None,
-) -> dict:
-    """
-    Answer a medication/condition question from publicly available (FDA-level)
-    information. Used when the question doesn't require personal records.
-    """
-    system = (
-        f"{MEDICATION_INFO_SYSTEM}\n\n"
-        "Additionally:\n"
-        "- Explain common, publicly known side effects\n"
-        "- Write at a 6th-grade reading level\n"
-        "- Use [JARGON: term | plain_english] for medical terms\n"
-        "- End with: 'If you have specific concerns, please discuss them with your doctor or pharmacist.'\n"
-        "- NEVER say whether the patient should take or stop taking the medication\n"
-    )
-
-    try:
-        result = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=0.2,
-            max_completion_tokens=1000,
-        )
-        raw = result.choices[0].message.content or ""
-        if not raw.strip():
-            raise ValueError("Empty response")
-
-        raw += (
-            "\n\n*This is general information from publicly available sources. "
-            "It is not personalized medical advice. Please ask your pharmacist "
-            "or doctor about your specific situation.*"
-        )
-
-        return {
-            "records": records or [],
-            "raw_response": raw,
-            "jargon_map": [],
-            "action_cards": [],
-        }
-
-    except Exception as exc:
-        log.warning("note_explainer: public knowledge fallback failed — %s", exc)
-        return {
-            "records": records or [],
-            "raw_response": (
-                "I wasn't able to look that up just now. You can try asking again, "
-                "or ask your pharmacist — they're a great resource for medication questions."
-            ),
-            "jargon_map": [],
-            "action_cards": [],
         }

@@ -39,6 +39,7 @@ from agent.nodes import (
     calendar_tool,
     medication_info,
     pre_visit_prep,
+    public_knowledge,
 )
 from config import get_settings
 
@@ -58,6 +59,7 @@ AVAILABLE_AGENTS = {
     "jargon_explainer": jargon_explainer.run,
     "calendar_tool":    calendar_tool.run,
     "medication_info":  medication_info.run,
+    "public_knowledge": public_knowledge.run,
     "pre_visit_prep":   pre_visit_prep.run,
 }
 
@@ -84,11 +86,15 @@ jargon_explainer — Explains a single medical term. Use when the user asks "wha
 
 calendar_tool — Shows upcoming appointments. Use when the user asks about their schedule.
 
-medication_info — Answers general questions about medications using publicly available
-  (FDA-level) information: what a drug is, what it's used for, common side effects,
-  how it's typically taken. Does NOT require the user's records. Use when the user asks
-  "what are the side effects of X?" or "what is X used for?" where the answer is
-  publicly available medical knowledge.
+medication_info — Answers questions specifically about medications using FDA-level info.
+  Use for focused medication questions (side effects, drug class, how it's taken).
+
+public_knowledge — Answers ANY general medical knowledge question from publicly available
+  sources. Use for: condition explanations ("What is atrial fibrillation?"), procedure
+  descriptions ("What happens during a cardiac cath?"), medical term definitions,
+  general health education, treatment explanations. Does NOT require the user's records.
+  Use whenever the question is about general medical knowledge, not the patient's
+  specific records.
 
 pre_visit_prep — Generates questions for the user to ask at their next doctor visit.
   Use when the user wants to prepare for an appointment.

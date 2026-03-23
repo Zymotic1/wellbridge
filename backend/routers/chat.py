@@ -109,6 +109,7 @@ async def chat_stream(
         "messages": history_messages + [HumanMessage(content=req.message)],
         "intent": None,
         "confidence": 0.0,
+        "information_source": "conversation",
         "tenant_id": ctx.tenant_id,
         "user_id": ctx.user_id,
         "role": ctx.role,

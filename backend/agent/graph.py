@@ -1,33 +1,22 @@
 """
 LangGraph state machine — the core of the WellBridge agentic brain.
 
-Optimized topology (latency-focused):
-  START → triage (single LLM call: emotional assessment + intent classification)
-        → MEDICAL_ADVICE → refusal_node → END  (static text, NO LLM)
-        → High-confidence single intent → fast_dispatch (skip supervisor, direct to specialist)
-        → Complex/multi-concern → supervisor (LLM-based multi-agent orchestrator)
-        → response_synthesizer → validator → response_assembler → END
+Optimized topology with LLM-driven information source routing:
+  START → triage (1 LLM call: emotion + intent + information_source)
+        → MEDICAL_ADVICE → refusal → END
+        → public_knowledge → public_knowledge node → validator → assembler → END
+        → High-confidence single intent → fast_dispatch → specialist → ...
+        → Complex/ambiguous → supervisor → specialist(s) → ...
+        → ... → response_synthesizer → validator → response_assembler → END
 
-LATENCY CHAIN (simple message, fast path):
-  1. triage (1 LLM call, gpt-4o-mini) — emotional state + intent + confidence
-  2. fast_dispatch → specialist node (1 LLM call, gpt-5.2) — the actual response
-  3. response_synthesizer (passthrough, no LLM)
-  4. validator (regex + readability, no LLM unless readability fails)
-  5. response_assembler (static suggestions, no LLM)
-  Total: 2 LLM calls for simple messages (down from 5)
+The triage LLM determines WHAT KIND of information the user needs:
+  public_knowledge  — General medical knowledge (FDA info, conditions, procedures)
+  patient_records   — The user's own uploaded medical documents
+  conversation      — Emotional support, logistics, app usage
+  refuse            — Medical advice request → refusal
 
-LATENCY CHAIN (complex message, supervisor path):
-  1. triage (1 LLM call)
-  2. supervisor (1+ LLM calls) → dispatches multiple specialists
-  3. response_synthesizer (1 LLM call if multi-agent merge needed)
-  4. validator + response_assembler (no LLM)
-  Total: 3-5 LLM calls for complex multi-concern messages
-
-CRITICAL SAFETY PROPERTIES (unchanged):
-  1. MEDICAL_ADVICE routes to refusal_node, which NEVER calls the LLM.
-  2. refusal_node is NOT in the supervisor's available agents list.
-  3. All LLM-generated outputs pass through the validator.
-  4. Triage runs before any specialist — emotional state always available.
+This eliminates brittle regex patterns — the LLM reasons about what
+information source is appropriate for each question.
 """
 
 from langgraph.graph import StateGraph, END
@@ -35,6 +24,7 @@ from langgraph.graph import StateGraph, END
 from agent.state import AgentState, IntentType
 from agent.nodes import triage
 from agent.nodes import refusal_node
+from agent.nodes import public_knowledge
 from agent.nodes import supervisor
 from agent.nodes import response_synthesizer
 from agent.nodes import validator
@@ -45,7 +35,6 @@ from agent.nodes import response_assembler
 # Fast dispatch — direct single-agent routing without supervisor LLM call
 # ---------------------------------------------------------------------------
 
-# Import specialist run() functions for fast-path dispatch
 from agent.nodes import (
     care_navigator, record_collector, record_lookup,
     note_summarizer, note_explainer, jargon_explainer,
@@ -66,15 +55,14 @@ _FAST_ROUTE_MAP = {
 
 async def fast_dispatch(state: AgentState) -> dict:
     """
-    Skip the supervisor LLM call — directly invoke the specialist agent
-    based on the triage intent. Used for high-confidence single-intent messages.
+    Skip the supervisor — directly invoke the specialist agent based on
+    the triage intent. Used for high-confidence single-intent messages.
     """
     intent = state.get("intent", "GENERAL")
     agent_fn = _FAST_ROUTE_MAP.get(intent, care_navigator.run)
 
     result = await agent_fn(state)
 
-    # Package as a single agent_output for the synthesizer
     from agent.state import AgentOutput
     agent_name = {v: k for k, v in _FAST_ROUTE_MAP.items()}.get(agent_fn, "care_navigator")
     ao = AgentOutput(
@@ -91,29 +79,55 @@ async def fast_dispatch(state: AgentState) -> dict:
         "records": result.get("records", state.get("records", [])),
         "appointments": result.get("appointments", state.get("appointments", [])),
         "supervisor_iterations": 0,
-        "supervisor_reasoning": ["fast_dispatch: high-confidence single intent, skipped supervisor"],
+        "supervisor_reasoning": [f"fast_dispatch: {intent}"],
+    }
+
+
+async def public_knowledge_dispatch(state: AgentState) -> dict:
+    """
+    Route public knowledge questions directly to the public_knowledge node.
+    No supervisor needed — the triage already determined the info source.
+    """
+    result = await public_knowledge.run(state)
+
+    from agent.state import AgentOutput
+    ao = AgentOutput(
+        agent_name="public_knowledge",
+        raw_response=result.get("raw_response", ""),
+        jargon_entries=result.get("jargon_map", []),
+        citations=[],
+        records_used=[],
+        action_cards=result.get("action_cards", []),
+    )
+
+    return {
+        "agent_outputs": [ao],
+        "supervisor_iterations": 0,
+        "supervisor_reasoning": ["public_knowledge: general medical question, no records needed"],
     }
 
 
 # ---------------------------------------------------------------------------
-# Conditional edge functions
+# Conditional edge: four-way routing after triage
 # ---------------------------------------------------------------------------
 
-FAST_PATH_CONFIDENCE = 0.85  # Threshold for skipping supervisor
+FAST_PATH_CONFIDENCE = 0.85
 
 
 def route_after_triage(state: AgentState) -> str:
     """
-    Three-way routing after triage:
-      1. MEDICAL_ADVICE → refusal (hard safety gate)
-      2. High-confidence single intent → fast_dispatch (skip supervisor)
-      3. Everything else → supervisor (LLM-based multi-agent routing)
+    Four-way routing based on triage output:
+      1. refuse / MEDICAL_ADVICE → refusal (hard safety gate)
+      2. public_knowledge → public_knowledge_dispatch (no records needed)
+      3. High-confidence single intent → fast_dispatch (skip supervisor)
+      4. Complex/ambiguous → supervisor (LLM multi-agent routing)
     """
     intent: IntentType | None = state.get("intent")
     confidence: float = state.get("confidence", 0.0)
+    info_source: str = state.get("information_source", "conversation")
 
-    # Safety gate: MEDICAL_ADVICE always refused
-    if intent == "MEDICAL_ADVICE":
+    # Safety gate: MEDICAL_ADVICE or refuse → always refused
+    if intent == "MEDICAL_ADVICE" or info_source == "refuse":
         return "refusal"
 
     # Low confidence on non-safe intent → refusal
@@ -124,6 +138,10 @@ def route_after_triage(state: AgentState) -> str:
     }
     if confidence < 0.70 and intent not in safe_low_confidence:
         return "refusal"
+
+    # Public knowledge: general medical questions answered without records
+    if info_source == "public_knowledge":
+        return "public_knowledge"
 
     # Fast path: high confidence + known single-agent intent → skip supervisor
     if confidence >= FAST_PATH_CONFIDENCE and intent in _FAST_ROUTE_MAP:
@@ -143,30 +161,33 @@ def build_graph() -> StateGraph:
     # Register nodes
     graph.add_node("triage",                triage.run)
     graph.add_node("refusal",               refusal_node.run)
+    graph.add_node("public_knowledge",      public_knowledge_dispatch)
     graph.add_node("fast_dispatch",         fast_dispatch)
     graph.add_node("supervisor",            supervisor.run)
     graph.add_node("response_synthesizer",  response_synthesizer.run)
     graph.add_node("validator",             validator.run)
     graph.add_node("response_assembler",    response_assembler.run)
 
-    # Entry: single triage call (emotional assessment + intent classification)
+    # Entry
     graph.set_entry_point("triage")
 
-    # Three-way routing after triage
+    # Four-way routing after triage
     graph.add_conditional_edges(
         "triage",
         route_after_triage,
         {
-            "refusal":       "refusal",
-            "fast_dispatch": "fast_dispatch",
-            "supervisor":    "supervisor",
+            "refusal":          "refusal",
+            "public_knowledge": "public_knowledge",
+            "fast_dispatch":    "fast_dispatch",
+            "supervisor":       "supervisor",
         },
     )
 
-    # Refusal → END (bypasses everything; pre-approved static text)
+    # Refusal → END
     graph.add_edge("refusal", END)
 
-    # Both fast_dispatch and supervisor → synthesizer → validator → assembler → END
+    # All other paths → synthesizer → validator → assembler → END
+    graph.add_edge("public_knowledge", "response_synthesizer")
     graph.add_edge("fast_dispatch", "response_synthesizer")
     graph.add_edge("supervisor", "response_synthesizer")
     graph.add_edge("response_synthesizer", "validator")

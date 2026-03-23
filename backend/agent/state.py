@@ -33,6 +33,14 @@ IntentType = Literal[
     "GENERAL",
 ]
 
+# Determined by triage: what kind of information source does this question need?
+InformationSource = Literal[
+    "public_knowledge",  # Answerable from publicly available medical/FDA info (no records needed)
+    "patient_records",   # Requires the patient's own uploaded records
+    "conversation",      # Can be answered from conversation context alone (emotional support, logistics)
+    "refuse",            # Medical advice — refuse, no information source can answer this
+]
+
 EmotionalState = Literal[
     "anxious",    # Scared, overwhelmed, uncertain — go slow, ask fewer questions
     "confused",   # Needs clarity and simple framing
@@ -105,6 +113,7 @@ class AgentState(MessagesState):
     # ---- Routing (set by safety_gate / intent_classifier) ----
     intent: Optional[IntentType]
     confidence: float
+    information_source: str       # "public_knowledge" | "patient_records" | "conversation" | "refuse"
 
     # ---- Tenant context (injected at graph entry, immutable) ----
     tenant_id: str
