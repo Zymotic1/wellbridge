@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useUser } from "@auth0/nextjs-auth0/client";
-import { Send, Loader2, Mic, MicOff, Square } from "lucide-react";
+import { Send, Loader2, Mic, MicOff, Square, Paperclip } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage, JargonMapping, ActionCard, SSEEvent } from "@/lib/types";
@@ -27,6 +27,8 @@ interface ChatWindowProps {
   sessionId: string;
   // If provided (from session creation), show as first message immediately
   openerMessage?: string;
+  // Called when the backend auto-generates a session title
+  onTitleUpdate?: (sessionId: string, title: string) => void;
 }
 
 // Contextual thinking phrases — rotated to feel less robotic
@@ -37,7 +39,7 @@ const THINKING_PHRASES = [
   "Putting this together for you...",
 ];
 
-export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps) {
+export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: ChatWindowProps) {
   const { user } = useUser();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     // If we have an opener from session creation, show it immediately
@@ -64,6 +66,8 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
   const [latestSuggestedReplies, setLatestSuggestedReplies] = useState<string[]>([]);
   // Epic / MyChart connect modal
   const [showEpicModal, setShowEpicModal] = useState(false);
+  // Long-text detection prompt
+  const [showLongTextPrompt, setShowLongTextPrompt] = useState(false);
 
   // Voice input state
   type MicPermission = "unknown" | "checking" | "granted" | "denied" | "unavailable";
@@ -76,6 +80,7 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const thinkingPhraseRef = useRef(0);
 
   // Fetch message history on mount / session change
@@ -322,9 +327,36 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
 
   // ── Message sending ────────────────────────────────────────────────────────
 
+  /** Detect if text looks like a pasted clinical note. */
+  const looksLikeClinicalNote = useCallback((text: string): boolean => {
+    if (text.length < 2000) return false;
+    const indicators = [
+      /\b(diagnosis|assessment|plan|medications?|prescribed|impression)\b/i,
+      /\b(ICD-?\d|CPT|mg|mcg|mL|BID|TID|QID|PRN|PO|IM|IV)\b/,
+      /\b(Dr\.|M\.D\.|D\.O\.|hospital|clinic|discharge|follow.?up)\b/i,
+      /\b(patient|chief complaint|history of present illness|physical exam)\b/i,
+    ];
+    const matches = indicators.filter((r) => r.test(text)).length;
+    return matches >= 2;
+  }, []);
+
+  /** Upload text as a document (bypasses chat, goes through note analysis). */
+  const uploadTextAsDocument = useCallback(async (text: string) => {
+    const blob = new Blob([text], { type: "text/plain" });
+    const file = new File([blob], "pasted-note.txt", { type: "text/plain" });
+    await handleUpload(file);
+  }, [handleUpload]);
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
+
+    // If the text looks like a pasted clinical note, prompt the user
+    if (looksLikeClinicalNote(text) && !showLongTextPrompt) {
+      setShowLongTextPrompt(true);
+      return;
+    }
+    setShowLongTextPrompt(false);
 
     // Optimistically add user message
     const userMsg: ChatMessage = {
@@ -388,6 +420,9 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
               setStreamingActionCards(finalActionCards);
             } else if (event.type === "suggested_replies") {
               finalSuggestedReplies = event.data;
+            } else if (event.type === "session_title") {
+              const titleEvt = event as unknown as { type: "session_title"; title: string };
+              onTitleUpdate?.(sessionId, titleEvt.title);
             } else if (event.type === "done") {
               const assistantMsg: ChatMessage = {
                 id: crypto.randomUUID(),
@@ -423,7 +458,7 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
     } finally {
       setIsStreaming(false);
     }
-  }, [input, isStreaming, sessionId]);
+  }, [input, isStreaming, sessionId, looksLikeClinicalNote, showLongTextPrompt, onTitleUpdate]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -659,7 +694,57 @@ export default function ChatWindow({ sessionId, openerMessage }: ChatWindowProps
           </button>
         </div>
 
+        {/* Long-text clinical note detection prompt */}
+        {showLongTextPrompt && (
+          <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs">
+            <p className="flex-1 text-amber-800">
+              This looks like a clinical note or document. Analyzing it as a document will extract
+              medications, appointments, and explain it in plain language.
+            </p>
+            <button
+              onClick={() => { setShowLongTextPrompt(false); uploadTextAsDocument(input.trim()); setInput(""); }}
+              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium
+                         hover:bg-amber-700 whitespace-nowrap"
+            >
+              Analyze as document
+            </button>
+            <button
+              onClick={() => { setShowLongTextPrompt(false); sendMessage(); }}
+              className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-medium
+                         hover:bg-slate-300 whitespace-nowrap"
+            >
+              Send as message
+            </button>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
+          {/* Hidden file input for attachment */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.doc,.txt,.rtf,.png,.jpg,.jpeg,.tiff,.heic,.mp3,.mp4,.m4a,.wav,.webm"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUpload(file);
+              e.target.value = "";
+            }}
+          />
+
+          {/* Attach button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isStreaming || isRecording || isTranscribing}
+            aria-label="Attach a document"
+            title="Upload a clinical note, lab result, or other document"
+            className="flex-shrink-0 w-11 h-11 rounded-xl bg-slate-100 text-slate-500
+                       flex items-center justify-center hover:bg-slate-200 hover:text-slate-700
+                       transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Paperclip size={18} />
+          </button>
+
           <textarea
             ref={inputRef}
             value={input}

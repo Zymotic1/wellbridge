@@ -352,6 +352,16 @@ export default function ChatPage() {
             <ChatWindow
               sessionId={active.session.id}
               openerMessage={active.openerMessage}
+              onTitleUpdate={(sid, title) => {
+                setSessions((prev) =>
+                  prev.map((s) => (s.id === sid ? { ...s, title } : s))
+                );
+                setActive((prev) =>
+                  prev && prev.session.id === sid
+                    ? { ...prev, session: { ...prev.session, title } }
+                    : prev
+                );
+              }}
             />
           ) : loadingSessions ? (
             <div className="flex h-full items-center justify-center">

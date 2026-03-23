@@ -129,6 +129,58 @@ export function generateMedicationICS({
   return lines.filter(Boolean).join("\r\n");
 }
 
+/** Generate a single ICS file with multiple medication reminder VEVENTs. */
+export function generateBatchMedicationICS(meds: MedicationICSParams[]): string {
+  const events: string[] = [];
+
+  for (const med of meds) {
+    const start = new Date();
+    start.setHours(8, 0, 0, 0);
+    if (start <= new Date()) start.setDate(start.getDate() + 1);
+    const end = new Date(start.getTime() + 15 * 60 * 1000);
+
+    const descParts: string[] = [];
+    if (med.dose) descParts.push(`Dose: ${med.dose}`);
+    if (med.frequency) descParts.push(`Frequency: ${med.frequency}`);
+    if (med.instructions) descParts.push(`Instructions: ${med.instructions}`);
+
+    const rrule = med.frequency ? frequencyToRRule(med.frequency) : "RRULE:FREQ=DAILY";
+    // Skip PRN (as-needed) meds — no recurring reminder
+    if (!rrule) continue;
+
+    const uid = `wellbridge-med-${med.medication.replace(/\s/g, "-")}-${Date.now()}@wellbridge.app`;
+
+    const lines: (string | null)[] = [
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTART:${icsDateTime(start)}`,
+      `DTEND:${icsDateTime(end)}`,
+      `SUMMARY:Take ${icsEscape(med.medication)}`,
+      descParts.length > 0 ? `DESCRIPTION:${icsEscape(descParts.join("\n"))}` : null,
+      rrule,
+      "BEGIN:VALARM",
+      "TRIGGER:-PT0S",
+      "ACTION:DISPLAY",
+      `DESCRIPTION:Time to take ${icsEscape(med.medication)}`,
+      "END:VALARM",
+      "END:VEVENT",
+    ];
+    events.push(lines.filter(Boolean).join("\r\n"));
+  }
+
+  if (events.length === 0) return "";
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//WellBridge//WellBridge//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    ...events,
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
 export interface AppointmentICSParams {
   provider?: string;
   specialty?: string;

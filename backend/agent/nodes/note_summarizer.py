@@ -15,7 +15,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping
-from agent.prompts import CONSTITUTIONAL_SYSTEM, NOTE_SUMMARIZER_EXAMPLES
+from agent.prompts import NOTE_SUMMARIZER_SYSTEM, NOTE_SUMMARIZER_EXAMPLES
 from services.supabase_client import get_scoped_client, get_admin_client
 from middleware.tenant import TenantContext
 from config import get_settings
@@ -77,7 +77,7 @@ async def run(state: AgentState) -> dict:
     )
 
     system_prompt = (
-        f"{CONSTITUTIONAL_SYSTEM}\n\n"
+        f"{NOTE_SUMMARIZER_SYSTEM}\n\n"
         f"EXAMPLES:\n{NOTE_SUMMARIZER_EXAMPLES}\n\n"
         "Return the summary and a list of jargon entries with source note IDs and "
         "the exact source sentence from the note for each term."
@@ -98,7 +98,7 @@ async def run(state: AgentState) -> dict:
             ],
             response_format={"type": "json_object"},
             temperature=0.3,
-            max_tokens=1500,
+            max_tokens=2500,
         )
 
         import json as _json

@@ -159,7 +159,7 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     primary_model = settings.openai_model
     # Fallback order: configured model → gpt-4o-mini
-    model_candidates = list(dict.fromkeys([primary_model, "gpt-4o-mini"]))
+    model_candidates = list(dict.fromkeys([primary_model, "gpt-5.2"]))
 
     messages = [
         {"role": "system", "content": ANALYSIS_SYSTEM},
@@ -260,6 +260,29 @@ def build_action_cards(analysis: NoteAnalysisResult) -> list[dict]:
                 "provider_name": ref.provider_name,
                 "reason": ref.reason,
                 "urgency": ref.urgency,
+            },
+        })
+
+    # Add a batch reminder card when 2+ schedulable prescriptions exist
+    schedulable = [rx for rx in analysis.prescriptions
+                   if not (rx.frequency and any(w in rx.frequency.lower()
+                           for w in ("prn", "as needed", "when needed")))]
+    if len(schedulable) >= 2:
+        cards.append({
+            "id": "med_reminder_batch",
+            "type": "medication_reminder_batch",
+            "label": f"Set up all {len(schedulable)} medication reminders",
+            "description": "Add recurring reminders for all prescribed medications to your calendar",
+            "payload": {
+                "medications": [
+                    {
+                        "medication": rx.medication,
+                        "dose": rx.dose,
+                        "frequency": rx.frequency,
+                        "instructions": rx.instructions,
+                    }
+                    for rx in schedulable
+                ],
             },
         })
 

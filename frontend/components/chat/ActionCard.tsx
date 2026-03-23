@@ -22,6 +22,7 @@ import type { ActionCard as ActionCardType } from "@/lib/types";
 import {
   isMobile,
   generateMedicationICS,
+  generateBatchMedicationICS,
   generateAppointmentICS,
   downloadICS,
   openGoogleCalendar,
@@ -157,6 +158,51 @@ function MedicationModal({ card, onClose }: { card: ActionCardType; onClose: () 
         {mobile
           ? "Opens your device's Calendar app."
           : "Google Calendar opens in a new tab. Use .ics to import into Apple Calendar or Outlook."}
+      </p>
+    </Modal>
+  );
+}
+
+function BatchMedicationModal({ card, onClose }: { card: ActionCardType; onClose: () => void }) {
+  const meds = (card.payload?.medications ?? []) as Array<{
+    medication: string; dose?: string; frequency?: string; instructions?: string;
+  }>;
+
+  function handleDownloadAll() {
+    const ics = generateBatchMedicationICS(
+      meds.map((m) => ({
+        medication: m.medication,
+        dose: m.dose,
+        frequency: m.frequency,
+        instructions: m.instructions,
+      }))
+    );
+    if (ics) downloadICS("medication-reminders", ics);
+  }
+
+  return (
+    <Modal title="Set up medication reminders" onClose={onClose}>
+      <div className="space-y-2 mb-4">
+        {meds.map((m, i) => (
+          <div key={i} className="bg-slate-50 rounded-xl p-3 space-y-1">
+            <p className="text-sm font-semibold text-slate-700">{m.medication}</p>
+            {m.dose && <p className="text-xs text-slate-500">Dose: {m.dose}</p>}
+            {m.frequency && <p className="text-xs text-slate-500">Frequency: {m.frequency}</p>}
+            {m.instructions && <p className="text-xs text-slate-400">{m.instructions}</p>}
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={handleDownloadAll}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                   bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+      >
+        <Calendar size={15} />
+        Add All Reminders to Calendar
+      </button>
+      <p className="text-[10px] text-slate-400 mt-2 text-center">
+        Downloads a single .ics file with recurring reminders for each medication.
+        PRN (as-needed) medications are excluded from recurring reminders.
       </p>
     </Modal>
   );
@@ -298,6 +344,7 @@ export default function ActionCard({ card, onUpload }: ActionCardProps) {
         break;
       }
       case "medication_reminder":
+      case "medication_reminder_batch":
       case "appointment_reminder":
       case "referral_followup":
         setModalOpen(true);
@@ -351,6 +398,11 @@ export default function ActionCard({ card, onUpload }: ActionCardProps) {
       {/* Medication reminder modal */}
       {modalOpen && card.type === "medication_reminder" && (
         <MedicationModal card={card} onClose={() => setModalOpen(false)} />
+      )}
+
+      {/* Batch medication reminder modal */}
+      {modalOpen && card.type === "medication_reminder_batch" && (
+        <BatchMedicationModal card={card} onClose={() => setModalOpen(false)} />
       )}
 
       {/* Follow-up appointment modal */}

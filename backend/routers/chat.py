@@ -35,6 +35,7 @@ from services.note_analysis_service import analyze_note, build_action_cards, bui
 from services.llama_parse_service import parse_document, UNSUPPORTED_FILE_MESSAGE
 from services.journey_update_service import update_journey_from_analysis
 from services.embedding_service import get_embedding
+from services.title_generation_service import generate_session_title
 
 log = logging.getLogger("wellbridge.chat")
 
@@ -173,6 +174,25 @@ async def chat_stream(
         yield f"data: {json.dumps({'type': 'jargon_map', 'data': jargon_map})}\n\n"
         yield f"data: {json.dumps({'type': 'action_cards', 'data': action_cards})}\n\n"
         yield f"data: {json.dumps({'type': 'suggested_replies', 'data': suggested_replies})}\n\n"
+
+        # Auto-generate session title on first real exchange
+        try:
+            session_row = (
+                db.table("chat_sessions")
+                .select("title")
+                .eq("id", req.session_id)
+                .limit(1)
+                .execute()
+            )
+            current_title = (session_row.data[0]["title"] if session_row.data else "")
+            if current_title == "New conversation":
+                title = await generate_session_title(req.message, response_text)
+                if title:
+                    db.table("chat_sessions").update({"title": title}).eq("id", req.session_id).execute()
+                    yield f"data: {json.dumps({'type': 'session_title', 'title': title})}\n\n"
+                    log.info("chat_stream: auto-titled session=%s title=%s", req.session_id, title)
+        except Exception as exc:
+            log.warning("chat_stream: auto-title failed (non-blocking) — %s", exc)
 
         # Signal completion
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
