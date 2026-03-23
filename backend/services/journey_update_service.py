@@ -66,10 +66,11 @@ async def update_journey_from_analysis(
 
         med_name = rx.medication.strip()
         content = _format_prescription_content(rx)
+        dose = (rx.dose or "").strip() or None
 
         try:
-            # Check if a prescription record already exists for this medication
-            existing = (
+            # ── Legacy: patient_records table (keeps Journey timeline compatible) ──
+            existing_rec = (
                 db.table("patient_records")
                 .select("id")
                 .eq("tenant_id", ctx.tenant_id)
@@ -80,9 +81,8 @@ async def update_journey_from_analysis(
                 .execute()
             )
 
-            if existing.data:
-                # Update — newer upload supersedes old dose/frequency
-                record_id = existing.data[0]["id"]
+            if existing_rec.data:
+                record_id = existing_rec.data[0]["id"]
                 db.table("patient_records").update({
                     "content": content,
                     "note_date": today,
@@ -90,17 +90,76 @@ async def update_journey_from_analysis(
                 log.info("journey: updated prescription record for '%s' (id=%s)", med_name, record_id)
                 meds_updated += 1
             else:
-                # Insert new prescription record
                 db.table("patient_records").insert({
                     "tenant_id": ctx.tenant_id,
                     "patient_user_id": ctx.user_id,
                     "record_type": "prescription",
-                    "provider_name": med_name,   # medication name in provider_name for Journey title
+                    "provider_name": med_name,
                     "note_date": today,
                     "content": content,
                 }).execute()
                 log.info("journey: inserted prescription record for '%s'", med_name)
                 meds_inserted += 1
+
+            # ── New: medications table (dose tracking with history) ──
+            try:
+                existing_med = (
+                    db.table("medications")
+                    .select("id, dose, status")
+                    .eq("tenant_id", ctx.tenant_id)
+                    .eq("user_id", ctx.user_id)
+                    .ilike("name", med_name)
+                    .eq("status", "active")
+                    .limit(1)
+                    .execute()
+                )
+
+                if existing_med.data:
+                    old = existing_med.data[0]
+                    old_dose = (old.get("dose") or "").strip()
+
+                    if dose and old_dose and dose.lower() != old_dose.lower():
+                        # Dose changed → mark old as adjusted, insert new with predecessor link
+                        db.table("medications").update({
+                            "status": "adjusted",
+                            "updated_at": "now()",
+                        }).eq("id", old["id"]).execute()
+
+                        db.table("medications").insert({
+                            "tenant_id": ctx.tenant_id,
+                            "user_id": ctx.user_id,
+                            "name": med_name,
+                            "dose": dose,
+                            "frequency": (rx.frequency or "").strip() or None,
+                            "instructions": (rx.instructions or "").strip() or None,
+                            "status": "active",
+                            "prescribed_date": today,
+                            "predecessor_id": old["id"],
+                        }).execute()
+                        log.info("journey: dose change for '%s': '%s' → '%s'", med_name, old_dose, dose)
+                    else:
+                        # Same dose — just update frequency/instructions if changed
+                        db.table("medications").update({
+                            "frequency": (rx.frequency or "").strip() or None,
+                            "instructions": (rx.instructions or "").strip() or None,
+                            "updated_at": "now()",
+                        }).eq("id", old["id"]).execute()
+                else:
+                    # New medication
+                    db.table("medications").insert({
+                        "tenant_id": ctx.tenant_id,
+                        "user_id": ctx.user_id,
+                        "name": med_name,
+                        "dose": dose,
+                        "frequency": (rx.frequency or "").strip() or None,
+                        "instructions": (rx.instructions or "").strip() or None,
+                        "status": "active",
+                        "prescribed_date": today,
+                    }).execute()
+                    log.info("journey: inserted medication '%s' into medications table", med_name)
+
+            except Exception as med_exc:
+                log.warning("journey: medications table update failed for '%s' — %s", med_name, med_exc)
 
         except Exception as exc:
             log.warning("journey: failed to upsert prescription '%s' — %s", med_name, exc)

@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
 from agent.graph import compile_graph
-from routers import chat, records, ocr, sharing, appointments, epic, users, speech
+from routers import chat, records, ocr, sharing, appointments, epic, users, speech, medications
 
 log      = logging.getLogger("wellbridge")
 settings = get_settings()
@@ -117,6 +117,7 @@ app.include_router(sharing.router)
 app.include_router(epic.router)
 app.include_router(users.router)
 app.include_router(speech.router)
+app.include_router(medications.router)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
