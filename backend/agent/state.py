@@ -110,10 +110,9 @@ class AgentOutput(TypedDict):
 
 
 class AgentState(MessagesState):
-    # ---- Routing (set by safety_gate / intent_classifier) ----
-    intent: Optional[IntentType]
-    confidence: float
-    information_source: str       # "public_knowledge" | "patient_records" | "conversation" | "refuse"
+    # ---- Routing ----
+    intent: Optional[IntentType]       # Set by brain (inferred from tool usage) or safety_precheck
+    is_refusal: bool                   # Set by safety_precheck (regex gate)
 
     # ---- Tenant context (injected at graph entry, immutable) ----
     tenant_id: str
@@ -123,28 +122,20 @@ class AgentState(MessagesState):
     # ---- Current chat session ----
     session_id: str
 
-    # ---- Emotional intelligence (set by emotional_assessor, used downstream) ----
-    emotional_state: EmotionalState          # Shapes tone and pacing
-    care_stage: CareStage                    # Where in the care journey they are
-    care_context: dict                       # Accumulated facts from conversation
-
-    # ---- Tool outputs ----
-    records: list          # list[dict] — patient_records rows from Supabase
-    appointments: list     # list[dict] — upcoming appointments
-    tool_error: Optional[str]
+    # ---- Tool outputs (populated by brain via function calling) ----
+    records: list          # list[dict] — patient_records from tool calls
+    appointments: list     # list[dict] — upcoming appointments from tool calls
 
     # ---- Response assembly ----
-    raw_response: Optional[str]    # LLM output before guardrail pass
+    raw_response: Optional[str]    # Brain output before guardrail pass
     final_response: Optional[str]  # Guardrail-approved output (sent to frontend)
     jargon_map: list               # list[JargonMapping] — for hover feature
     action_cards: list             # list[ActionCard] — interactive prompts for user
-    suggested_replies: list        # list[str] — AI-generated quick-reply pills (ephemeral, not persisted)
+    suggested_replies: list        # list[str] — quick-reply pills
 
     # ---- Refusal context ----
     refusal_context_facts: list    # list[str]
 
-    # ---- Multi-agent orchestration (Phase 2) ----
-    agent_outputs: list            # list[AgentOutput] — collected by Supervisor
-    citations: list                # list[Citation] — built by response_synthesizer
-    supervisor_iterations: int     # How many Supervisor loop passes ran
+    # ---- Observability ----
+    tool_calls_log: list           # list[dict] — what tools the brain called (for debugging)
     supervisor_reasoning: list     # list[str] — audit trail of Supervisor decisions

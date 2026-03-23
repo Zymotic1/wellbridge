@@ -108,29 +108,20 @@ async def chat_stream(
     initial_state: AgentState = {
         "messages": history_messages + [HumanMessage(content=req.message)],
         "intent": None,
-        "confidence": 0.0,
-        "information_source": "conversation",
+        "is_refusal": False,
         "tenant_id": ctx.tenant_id,
         "user_id": ctx.user_id,
         "role": ctx.role,
         "session_id": req.session_id,
-        "emotional_state": "calm",
-        "care_stage": "unknown",
-        "care_context": {},
         "records": [],
         "appointments": [],
-        "tool_error": None,
         "raw_response": None,
         "final_response": None,
         "jargon_map": [],
         "action_cards": [],
         "suggested_replies": [],
         "refusal_context_facts": [],
-        # Phase 2: multi-agent orchestration
-        "agent_outputs": [],
-        "citations": [],
-        "supervisor_iterations": 0,
-        "supervisor_reasoning": [],
+        "tool_calls_log": [],
     }
 
     async def event_generator():
