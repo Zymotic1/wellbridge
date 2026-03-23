@@ -16,6 +16,7 @@ from services.openai_client import get_openai_client
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping
+from services.conversational_response import generate_contextual_response
 from agent.prompts import NOTE_SUMMARIZER_SYSTEM, NOTE_SUMMARIZER_EXAMPLES
 from services.supabase_client import get_scoped_client, get_admin_client
 from middleware.tenant import TenantContext
@@ -63,11 +64,21 @@ async def run(state: AgentState) -> dict:
             records = []
 
     if not records:
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        response = await generate_contextual_response(
+            user_message=user_message,
+            situation="The user wants a summary of their records, but no clinical records have been uploaded yet.",
+            available_actions=["upload documents using the paperclip button in the chat", "tell WellBridge about their recent visits or medications"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": [],
-            "raw_response": "I don't see any records on file yet. "
-                            "You can upload documents in the Records section.",
+            "raw_response": response,
             "jargon_map": [],
+            "action_cards": [{"id": "upload_records", "type": "upload",
+                              "label": "Upload a document",
+                              "description": "Share your clinical notes, letters, or test results",
+                              "payload": {}}],
         }
 
     # Format notes with IDs so GPT-4o can reference them in jargon entries
@@ -135,19 +146,15 @@ async def run(state: AgentState) -> dict:
         }
 
     except Exception as exc:
-        if records:
-            fallback = (
-                "I wasn't able to summarize your records just now, but they are on file. "
-                "You can try asking me a specific question about them — for example, "
-                "\"What medications am I taking?\" or \"What did my last visit note say?\""
-            )
-        else:
-            fallback = (
-                "I don't have any records on file yet. To get started, you can upload "
-                "your clinical notes, discharge summaries, or test results using the "
-                "paperclip button below. Once I have them, I'll summarize everything "
-                "in plain language."
-            )
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        record_count = len(records)
+        fallback = await generate_contextual_response(
+            user_message=user_message,
+            situation=f"The user wants a summary of their records. {record_count} record(s) on file. The summarization couldn't complete — suggest they ask a specific question or upload additional documents.",
+            available_actions=["ask a specific question about their records", "upload new documents using the paperclip button"],
+            records_summary=f"{record_count} record(s) on file" if records else "none",
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": records,
             "tool_error": str(exc),

@@ -18,6 +18,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from agent.state import AgentState, ActionCard
 from agent.prompts import RECORD_COLLECTOR_SYSTEM
 from config import get_settings
+from services.conversational_response import generate_contextual_response
 
 settings = get_settings()
 
@@ -96,7 +97,8 @@ async def run(state: AgentState) -> dict:
     action_cards = _infer_action_cards(last_message, facts)
 
     if not settings.openai_configured:
-        # Graceful fallback without LLM
+        # Graceful fallback without LLM — cannot call generate_contextual_response
+        # here because OpenAI itself is not configured.
         return {
             "raw_response": (
                 "I'd love to help you keep track of that. "
@@ -146,10 +148,11 @@ async def run(state: AgentState) -> dict:
         )
         raw_response = response.choices[0].message.content or ""
     except Exception:
-        raw_response = (
-            "I'd love to help you keep everything organized. "
-            "You can share any documents or notes from your care team "
-            "and I'll help you understand and remember what they say."
+        raw_response = await generate_contextual_response(
+            user_message=last_message,
+            situation="The patient mentioned health information they want to store, but the LLM that generates the warm record-collection response failed.",
+            available_actions=["upload documents or photos of records", "share details about their care verbally"],
+            emotional_state=emotional_state,
         )
 
     return {

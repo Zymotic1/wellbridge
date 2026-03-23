@@ -13,6 +13,7 @@ calendar write access requires an OAuth flow that cannot happen mid-chat.
 from agent.state import AgentState
 from services.supabase_client import get_scoped_client
 from middleware.tenant import TenantContext
+from services.conversational_response import generate_contextual_response
 
 
 async def run(state: AgentState) -> dict:
@@ -61,13 +62,16 @@ async def run(state: AgentState) -> dict:
         return state_update
 
     except Exception as exc:
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        error_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The system encountered an error while fetching the patient's upcoming appointments from the database.",
+            available_actions=["tell us about an upcoming visit so we can track it", "try asking again", "add appointments manually in the Appointments section"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "appointments": [],
             "tool_error": str(exc),
-            "raw_response": (
-                "I wasn't able to check your appointments just now. "
-                "If you have an upcoming visit, you can tell me about it "
-                "and I'll help you keep track of it."
-            ),
+            "raw_response": error_text,
             "jargon_map": [],
         }

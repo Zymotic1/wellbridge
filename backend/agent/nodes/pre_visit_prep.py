@@ -25,6 +25,7 @@ from agent.state import AgentState
 from agent.prompts import CONSTITUTIONAL_SYSTEM, PRE_VISIT_PREP_EXAMPLES
 from services.supabase_client import get_admin_client
 from config import get_settings
+from services.conversational_response import generate_contextual_response
 
 settings = get_settings()
 
@@ -73,15 +74,16 @@ async def run(state: AgentState) -> dict:
             appointments = appt_result.data or []
 
     except Exception as exc:
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        error_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The patient wants help preparing for a doctor appointment, but the system encountered an error retrieving their records and appointments from the database.",
+            available_actions=["upload visit notes or test results using the paperclip button", "describe topics they want to discuss with their doctor"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "tool_error": str(exc),
-            "raw_response": (
-                "I'd love to help you prepare for your appointment. To put together "
-                "the most useful questions, it helps to have your recent visit notes "
-                "or test results on hand.\n\n"
-                "You can upload them using the paperclip button, or just tell me "
-                "what topics you'd like to discuss with your doctor."
-            ),
+            "raw_response": error_text,
             "jargon_map": [],
             "action_cards": [{"id": "upload_records", "type": "upload",
                               "label": "Upload your visit notes",
@@ -118,17 +120,16 @@ async def run(state: AgentState) -> dict:
     # Still no records and no history context → ask what concerns them
     # (warmly invite them to share topics; don't just tell them to upload)
     if not records and not history_context:
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        no_context_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The patient wants to prepare for a doctor visit but has no health records on file and no prior conversation context. We can still help if they tell us their concerns.",
+            available_actions=["share health topics or concerns they want to discuss", "upload a health record using the paperclip button", "describe a symptom, diagnosis, or medication they have questions about"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": [],
-            "raw_response": (
-                "I'd love to help you prepare for your next visit!\n\n"
-                "I don't have any of your health records on file yet — but that's okay, "
-                "I can still help you put together good questions.\n\n"
-                "What health topics or concerns are you thinking about bringing up with "
-                "your doctor? For example: a symptom you've been noticing, a diagnosis "
-                "you received, a medication you have questions about, or anything else "
-                "that's on your mind."
-            ),
+            "raw_response": no_context_text,
             "jargon_map": [],
             "action_cards": [{
                 "id": "upload_records",
@@ -240,12 +241,15 @@ async def run(state: AgentState) -> dict:
         }
 
     except Exception as exc:
+        user_message = state["messages"][-1].content if state.get("messages") else ""
+        question_error_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The patient wants pre-visit preparation questions but the LLM failed to generate them. Records are available but question generation encountered an error.",
+            available_actions=["try asking again", "tell us what topics are on their mind so we can help frame questions for their doctor"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "tool_error": str(exc),
-            "raw_response": (
-                "I wasn't able to put together your questions just now. "
-                "You can try asking again, or tell me what topics are on your mind "
-                "and I'll help you frame them as questions for your doctor."
-            ),
+            "raw_response": question_error_text,
             "jargon_map": [],
         }

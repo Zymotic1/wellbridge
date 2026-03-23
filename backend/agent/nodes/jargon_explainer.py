@@ -14,6 +14,7 @@ from agent.prompts import JARGON_EXPLAINER_SYSTEM
 from services.supabase_client import get_scoped_client
 from middleware.tenant import TenantContext
 from config import get_settings
+from services.conversational_response import generate_contextual_response
 
 settings = get_settings()
 
@@ -63,11 +64,14 @@ async def run(state: AgentState) -> dict:
         raw = result.choices[0].message.content or ""
         return {"raw_response": raw, "jargon_map": []}
     except Exception as exc:
+        error_text = await generate_contextual_response(
+            user_message=user_query,
+            situation="The patient asked about a medical term but the LLM failed to generate an explanation.",
+            available_actions=["try asking again", "specify the exact medical term they want explained"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "tool_error": str(exc),
-            "raw_response": (
-                "I wasn't able to look that up just now. Could you try asking again, "
-                "or tell me the specific medical term you'd like explained?"
-            ),
+            "raw_response": error_text,
             "jargon_map": [],
         }

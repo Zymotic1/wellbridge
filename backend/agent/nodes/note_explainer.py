@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from agent.state import AgentState, JargonMapping, ActionCard
 from agent.prompts import NOTE_EXPLANATION_SYSTEM, NOTE_EXPLANATION_EXAMPLES
 from services.supabase_client import get_admin_client
+from services.conversational_response import generate_contextual_response
 from middleware.tenant import TenantContext
 from config import get_settings
 
@@ -74,18 +75,15 @@ async def run(state: AgentState) -> dict:
             "description": "Photograph or scan your discharge summary, clinic letter, or test results",
             "payload": {},
         }
+        response = await generate_contextual_response(
+            user_message=user_message,
+            situation="The user wants help understanding what their doctor told them, but no clinical records have been uploaded yet.",
+            available_actions=["upload documents using the paperclip button", "describe what the doctor said in their own words"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": [],
-            "raw_response": (
-                "It sounds like you'd like help understanding what your doctor told you — "
-                "that's exactly what I'm here for.\n\n"
-                "To get started, I'll need your visit notes. If you received any "
-                "paperwork — a discharge summary, clinic letter, or printed results — "
-                "you can photograph it and upload it using the paperclip button or the "
-                "button below.\n\n"
-                "If you don't have the paperwork handy, you can also tell me what your "
-                "doctor said in your own words and I'll help explain it."
-            ),
+            "raw_response": response,
             "jargon_map": [],
             "action_cards": [upload_card],
         }
@@ -156,7 +154,6 @@ async def run(state: AgentState) -> dict:
     except Exception as exc:
         log.warning("note_explainer: LLM call failed — %s", exc)
 
-        # Smart fallback: show what records we have and offer guidance
         upload_card: ActionCard = {
             "id": "upload_records",
             "type": "upload",
@@ -165,19 +162,17 @@ async def run(state: AgentState) -> dict:
             "payload": {},
         }
 
-        # Build a helpful summary of available records
-        record_summary = "\n".join(
-            f"• {r.get('provider_name', 'Document')} ({r.get('record_type', 'note')}, "
-            f"{str(r.get('note_date', ''))[:10]})"
+        record_summary = ", ".join(
+            f"{r.get('provider_name', 'Document')} ({str(r.get('note_date', ''))[:10]})"
             for r in records[:5]
-        )
+        ) if records else "none"
 
-        fallback_msg = (
-            f"I can see you have these records on file:\n{record_summary}\n\n"
-            "I wasn't able to process them right now. You can try:\n"
-            "• Asking a more specific question, like \"What medications are listed in my notes?\"\n"
-            "• Uploading a new document if you're asking about a recent visit\n"
-            "• Telling me what your doctor said in your own words"
+        fallback_msg = await generate_contextual_response(
+            user_message=user_message,
+            situation=f"The user wants help understanding their records. Records on file: {record_summary}. The analysis couldn't complete — suggest they try a more specific question, upload a new document, or describe what their doctor said.",
+            available_actions=["ask a specific question about their records", "upload a new document", "describe what the doctor said in their own words"],
+            records_summary=record_summary,
+            emotional_state=state.get("emotional_state", "calm"),
         )
 
         return {

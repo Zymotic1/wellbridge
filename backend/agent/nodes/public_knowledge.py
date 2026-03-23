@@ -25,6 +25,8 @@ from agent.state import AgentState
 from services.openai_client import get_openai_client
 from config import get_settings
 
+from services.conversational_response import generate_contextual_response
+
 log = logging.getLogger("wellbridge.public_knowledge")
 settings = get_settings()
 
@@ -142,12 +144,14 @@ async def run(state: AgentState) -> dict:
 
     except Exception as exc:
         log.warning("public_knowledge: LLM call failed — %s", exc)
+        error_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The patient asked a general medical knowledge question but the LLM failed to generate an answer.",
+            available_actions=["try asking again", "ask their doctor or pharmacist for more information"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
-            "raw_response": (
-                "I wasn't able to look that up just now. You can try asking again, "
-                "or ask your doctor or pharmacist — they're great resources for "
-                "medical questions."
-            ),
+            "raw_response": error_text,
             "jargon_map": [],
             "action_cards": [],
         }

@@ -17,6 +17,7 @@ from services.openai_client import get_openai_client
 from agent.state import AgentState
 from agent.prompts import MEDICATION_INFO_SYSTEM
 from config import get_settings
+from services.conversational_response import generate_contextual_response
 
 settings = get_settings()
 
@@ -48,11 +49,14 @@ async def run(state: AgentState) -> dict:
 
         return {"raw_response": raw, "jargon_map": []}
     except Exception as exc:
+        error_text = await generate_contextual_response(
+            user_message=user_query,
+            situation="The patient asked about a medication but the LLM failed to generate information about it.",
+            available_actions=["try asking again", "provide the medication name so we can look it up"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "tool_error": str(exc),
-            "raw_response": (
-                "I wasn't able to look up that medication just now. "
-                "Could you tell me the medication name and I'll try again?"
-            ),
+            "raw_response": error_text,
             "jargon_map": [],
         }

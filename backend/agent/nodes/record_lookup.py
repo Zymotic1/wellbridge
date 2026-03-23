@@ -29,6 +29,7 @@ from agent.prompts import CONSTITUTIONAL_SYSTEM
 from services.supabase_client import get_admin_client
 from services.embedding_service import get_query_embedding
 from config import get_settings
+from services.conversational_response import generate_contextual_response
 
 settings = get_settings()
 
@@ -125,15 +126,16 @@ async def run(state: AgentState) -> dict:
         )
         all_records: list[dict] = index_result.data or []
     except Exception as exc:
+        fallback_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The system encountered an error while fetching the patient's health records from the database.",
+            available_actions=["upload documents using the paperclip button", "try asking again", "describe what they're looking for verbally"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": [],
             "tool_error": str(exc),
-            "raw_response": (
-                "I wasn't able to search your records just now. If you have documents "
-                "to share — clinic letters, test results, or discharge notes — you can "
-                "upload them using the paperclip button and I'll help you find what "
-                "you're looking for."
-            ),
+            "raw_response": fallback_text,
             "jargon_map": [],
             "action_cards": [{"id": "upload_records", "type": "upload",
                               "label": "Upload a document",
@@ -150,15 +152,15 @@ async def run(state: AgentState) -> dict:
             "description": "Add a discharge summary, clinic letter, or lab result",
             "payload": {},
         }
+        no_records_text = await generate_contextual_response(
+            user_message=user_message,
+            situation="The patient has no health records on file yet. They asked about their records but nothing has been uploaded.",
+            available_actions=["upload a discharge summary, clinic letter, lab result, or prescription using the paperclip button", "describe what they remember verbally"],
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": [],
-            "raw_response": (
-                "I don't have any records on file for you yet, so I can't look "
-                "anything up.\n\n"
-                "If you have paperwork from a visit — a discharge summary, clinic "
-                "letter, lab printout, or prescription — you can upload it here and "
-                "I'll go through it with you."
-            ),
+            "raw_response": no_records_text,
             "jargon_map": [],
             "action_cards": [upload_card],
         }
@@ -281,14 +283,17 @@ async def run(state: AgentState) -> dict:
             f"from {r.get('provider_name', 'Unknown')}"
             for r in all_records[:10]
         ]
+        records_summary = "\n".join(summary_lines)
+        llm_fallback_text = await generate_contextual_response(
+            user_message=user_message,
+            situation=f"The patient has {len(all_records)} record(s) on file but the system had trouble analyzing them in detail. Here is what's on file:\n{records_summary}",
+            available_actions=["ask a more specific question about their records", "try asking again"],
+            records_summary=records_summary,
+            emotional_state=state.get("emotional_state", "calm"),
+        )
         return {
             "records": all_records[:10],
-            "raw_response": (
-                f"I found {len(all_records)} record(s) but had trouble reading "
-                f"them in detail right now. Here's what's on file:\n\n"
-                + "\n".join(summary_lines)
-                + "\n\nCould you tell me more specifically what you'd like to know?"
-            ),
+            "raw_response": llm_fallback_text,
             "jargon_map": [],
             "tool_error": str(exc),
         }
