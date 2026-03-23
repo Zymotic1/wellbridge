@@ -18,6 +18,7 @@ Why text-embedding-3-small:
 
 import logging
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 
 from config import get_settings
 
@@ -45,7 +46,7 @@ async def get_embedding(text: str) -> list[float]:
     truncated = text[:MAX_EMBED_CHARS]
 
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         response = await client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=truncated,
@@ -66,7 +67,7 @@ async def get_query_embedding(query: str) -> list[float]:
     if not query or not query.strip():
         return []
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         response = await client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=query.strip(),

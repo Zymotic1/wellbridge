@@ -13,6 +13,7 @@ the user can rename manually.
 import logging
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from config import get_settings
 
 log = logging.getLogger("wellbridge.title_generation")
@@ -42,7 +43,7 @@ async def generate_session_title(user_message: str, assistant_response: str) -> 
         return None
 
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         result = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[

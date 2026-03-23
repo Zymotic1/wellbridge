@@ -17,6 +17,7 @@ import json
 import logging
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 
 from agent.state import AgentState, JargonMapping, Citation
 from config import get_settings
@@ -115,7 +116,7 @@ async def run(state: AgentState) -> dict:
 async def _merge_texts(agent_texts: list[str]) -> str:
     """LLM call to merge multiple agent outputs into one coherent response."""
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         combined = "\n\n".join(agent_texts)
 
         result = await client.chat.completions.create(

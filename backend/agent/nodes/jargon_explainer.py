@@ -7,6 +7,7 @@ prompt. Never speculates about what the term means for the patient's health.
 """
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 
 from agent.state import AgentState
 from agent.prompts import JARGON_EXPLAINER_SYSTEM
@@ -18,7 +19,7 @@ settings = get_settings()
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     user_query: str = state["messages"][-1].content
 
     ctx = TenantContext(

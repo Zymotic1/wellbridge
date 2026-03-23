@@ -28,6 +28,7 @@ The distinction between this node and note_summarizer:
 """
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping, ActionCard
@@ -52,7 +53,7 @@ class ExplanationResult(BaseModel):
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     ctx = TenantContext(
         tenant_id=state["tenant_id"],
         user_id=state["user_id"],

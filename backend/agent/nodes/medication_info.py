@@ -12,6 +12,7 @@ to ensure factual accuracy beyond the LLM's training data.
 """
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 
 from agent.state import AgentState
 from agent.prompts import MEDICATION_INFO_SYSTEM
@@ -21,7 +22,7 @@ settings = get_settings()
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     user_query: str = state["messages"][-1].content
 
     try:

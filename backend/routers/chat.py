@@ -182,7 +182,10 @@ async def chat_stream(
         yield f"data: {json.dumps({'type': 'action_cards', 'data': action_cards})}\n\n"
         yield f"data: {json.dumps({'type': 'suggested_replies', 'data': suggested_replies})}\n\n"
 
-        # Auto-generate session title on first real exchange
+        # Signal completion first — user sees the response immediately
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        # Auto-generate session title AFTER done (non-blocking for the user)
         try:
             session_row = (
                 db.table("chat_sessions")
@@ -200,9 +203,6 @@ async def chat_stream(
                     log.info("chat_stream: auto-titled session=%s title=%s", req.session_id, title)
         except Exception as exc:
             log.warning("chat_stream: auto-title failed (non-blocking) — %s", exc)
-
-        # Signal completion
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

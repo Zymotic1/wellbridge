@@ -19,6 +19,7 @@ Key behaviors:
 import re
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from langchain_core.messages import HumanMessage, AIMessage
 
 from agent.state import AgentState, ActionCard
@@ -159,7 +160,7 @@ async def run(state: AgentState) -> dict:
         elif isinstance(msg, AIMessage):
             history.append({"role": "assistant", "content": msg.content})
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     try:
         response = await client.chat.completions.create(
             model=settings.openai_model,

@@ -17,6 +17,7 @@ Key behavior:
 import json as _json
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 from langchain_core.messages import AIMessage
 
@@ -34,7 +35,7 @@ class PrepQuestions(BaseModel):
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
 
     tenant_id: str = state["tenant_id"]
     user_id: str = state["user_id"]

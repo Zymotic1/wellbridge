@@ -21,6 +21,7 @@ queries.
 import json
 import re
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping, ActionCard
@@ -95,7 +96,7 @@ Return JSON with this structure:
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
 
     tenant_id: str = state["tenant_id"]
     user_id: str = state["user_id"]

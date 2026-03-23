@@ -14,6 +14,7 @@ import json
 import logging
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -39,7 +40,7 @@ async def run(state: AgentState) -> dict:
     Classify intent. If MEDICAL_ADVICE → state is marked for refusal.
     Otherwise → state carries the intent for the Supervisor to use.
     """
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
 
     messages_for_llm = [{"role": "system", "content": CLASSIFIER_SYSTEM}]
 

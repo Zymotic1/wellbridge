@@ -22,6 +22,7 @@ information → NOTE_EXPLANATION or RECORD_LOOKUP (allowed, with guardrails).
 
 import json
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -186,7 +187,7 @@ class IntentResult(BaseModel):
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
 
     # Include recent conversation context so classification is history-aware
     messages_for_llm = [{"role": "system", "content": CLASSIFIER_SYSTEM}]

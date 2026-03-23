@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # --- OpenAI ---
     openai_api_key: str = ""
     openai_model: str = "gpt-5.2"
+    openai_classification_model: str = "gpt-4o-mini"  # Faster/cheaper model for triage + classification
     openai_embedding_model: str = "text-embedding-3-small"
 
     # --- Supabase ---

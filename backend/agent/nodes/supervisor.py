@@ -25,6 +25,7 @@ import json
 import logging
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 
 from agent.state import AgentState, AgentOutput
@@ -230,7 +231,7 @@ async def _supervisor_decide(
 ) -> SupervisorDecision | None:
     """Make a single Supervisor LLM decision call."""
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
 
         user_prompt = (
             f"User message: {user_message}\n"

@@ -19,6 +19,7 @@ import json
 import logging
 from typing import Optional
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 
 log = logging.getLogger("wellbridge.note_analysis")
@@ -156,7 +157,7 @@ async def analyze_note(note_text: str) -> NoteAnalysisResult:
     OpenAI project regardless of which models have beta structured-output access.
     Falls back to gpt-4o-mini if the primary model returns a 403/permission error.
     """
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     primary_model = settings.openai_model
     # Fallback order: configured model → gpt-4o-mini
     model_candidates = list(dict.fromkeys([primary_model, "gpt-5.2"]))

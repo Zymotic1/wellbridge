@@ -17,6 +17,7 @@ from agent.state import AgentState
 from guardrails.medical_output_guard import apply_medical_guardrail
 from guardrails.readability_guard import check_readability
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from config import get_settings
 
 log = logging.getLogger("wellbridge.validator")
@@ -80,7 +81,7 @@ async def run(state: AgentState) -> dict:
 async def _simplify_text(text: str) -> str:
     """Rewrite at 6th-grade level without changing the information."""
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         result = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[

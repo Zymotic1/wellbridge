@@ -18,6 +18,7 @@ The suggestions are ephemeral UI hints — they are NOT persisted to the databas
 """
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 
 from config import get_settings
@@ -87,13 +88,59 @@ async def generate_suggested_replies(
 ) -> list[str]:
     """
     Generate 2-4 contextual quick-reply suggestions for the user.
-    Returns [] on any failure — the UI falls back to free-text input gracefully.
+
+    Uses fast static/template suggestions instead of an LLM call.
+    The suggestions are mapped by intent and context (has_records, care_stage,
+    action_cards) which provides good coverage without latency.
     """
-    if not settings.openai_configured:
-        return _fallback_suggestions(intent)
+    # Context-enhanced static suggestions (no LLM call — instant)
+    cards = action_cards or []
+    has_upload_card = any(c.get("type") == "upload" for c in cards if isinstance(c, dict))
+    has_med_card = any(c.get("type") in ("medication_reminder", "medication_reminder_batch")
+                       for c in cards if isinstance(c, dict))
+
+    if intent == "NOTE_EXPLANATION" and has_records:
+        suggestions = ["Can you explain that in simpler terms?", "What should I ask at my next visit?"]
+        if has_med_card:
+            suggestions.append("Tell me more about my medications")
+        else:
+            suggestions.append("I have more paperwork to share")
+        return suggestions
+
+    if intent == "CARE_NAVIGATION":
+        suggestions = ["I have questions about what happens next"]
+        if not has_records:
+            suggestions.insert(0, "I have a note from today's visit")
+        else:
+            suggestions.insert(0, "Can you look at my recent records?")
+        suggestions.append("Help me prepare for my next visit")
+        return suggestions
+
+    if intent == "RECORD_LOOKUP" and has_records:
+        return [
+            "Can you explain that in simpler terms?",
+            "What about my medications?",
+            "Help me write a question for my care team",
+        ]
+
+    if intent == "PRE_VISIT_PREP":
+        return [
+            "Can you add more questions?",
+            "I have a document to share",
+            "What do my records say about this?",
+        ]
+
+    if intent == "SCHEDULING":
+        return [
+            "What should I ask at that appointment?",
+            "Help me prepare for the visit",
+            "Show me my records",
+        ]
+
+    return _fallback_suggestions(intent)
 
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
 
         context_parts = [
             f"User's message: {user_message[:200]}",

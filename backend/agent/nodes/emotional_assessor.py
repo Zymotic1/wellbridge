@@ -14,6 +14,7 @@ Temperature is 0.1 — we want consistency, not creativity.
 
 import json
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel, Field
 
 from agent.state import AgentState, EmotionalState, CareStage
@@ -57,7 +58,7 @@ async def run(state: AgentState) -> dict:
     )
 
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         result = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[

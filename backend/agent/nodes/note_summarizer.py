@@ -12,6 +12,7 @@ frontend can highlight spans without fragile word-index counting.
 """
 
 from openai import AsyncOpenAI
+from services.openai_client import get_openai_client
 from pydantic import BaseModel
 
 from agent.state import AgentState, JargonMapping
@@ -36,7 +37,7 @@ class SummaryWithJargon(BaseModel):
 
 
 async def run(state: AgentState) -> dict:
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = get_openai_client()
     records = state.get("records", [])
 
     # If records not yet loaded, fetch them
