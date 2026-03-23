@@ -18,7 +18,7 @@ import { useUser } from "@auth0/nextjs-auth0/client";
 import { Send, Loader2, Mic, MicOff, Square, Paperclip } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage, JargonMapping, ActionCard, SSEEvent } from "@/lib/types";
+import type { ChatMessage, JargonMapping, ActionCard, Citation, SSEEvent } from "@/lib/types";
 import MessageBubble from "./MessageBubble";
 import ActionCardComponent from "./ActionCard";
 import EpicConnectModal from "./EpicConnectModal";
@@ -61,6 +61,7 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
   const [streamingContent, setStreamingContent] = useState("");
   const [streamingJargonMap, setStreamingJargonMap] = useState<JargonMapping[]>([]);
   const [streamingActionCards, setStreamingActionCards] = useState<ActionCard[]>([]);
+  const [streamingCitations, setStreamingCitations] = useState<Citation[]>([]);
   const [thinkingPhrase, setThinkingPhrase] = useState(THINKING_PHRASES[0]);
   // Suggested replies shown below the latest assistant message
   const [latestSuggestedReplies, setLatestSuggestedReplies] = useState<string[]>([]);
@@ -393,6 +394,7 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
       let finalJargonMap: JargonMapping[] = [];
       let finalActionCards: ActionCard[] = [];
       let finalSuggestedReplies: string[] = [];
+      let finalCitations: Citation[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -415,6 +417,9 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
             } else if (event.type === "jargon_map") {
               finalJargonMap = event.data;
               setStreamingJargonMap(finalJargonMap);
+            } else if (event.type === "citations") {
+              finalCitations = event.data;
+              setStreamingCitations(finalCitations);
             } else if (event.type === "action_cards") {
               finalActionCards = event.data;
               setStreamingActionCards(finalActionCards);
@@ -429,6 +434,7 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
                 role: "assistant",
                 content: accumulated,
                 jargon_map: finalJargonMap,
+                citations: finalCitations,
                 action_cards: finalActionCards,
                 suggested_replies: finalSuggestedReplies,
                 created_at: new Date().toISOString(),
@@ -438,6 +444,7 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
               setStreamingContent("");
               setStreamingJargonMap([]);
               setStreamingActionCards([]);
+              setStreamingCitations([]);
             } else if (event.type === "error") {
               throw new Error((event as { type: "error"; message: string }).message);
             }

@@ -26,14 +26,23 @@ export type IntentType =
   | "RECORD_COLLECTION"
   | "GENERAL";
 
+export interface Citation {
+  source_record_id: string;   // UUID of patient_records row
+  source_quote: string;       // Exact text from the record
+  claim_text: string;         // The claim in the response this supports
+  citation_index: number;     // [1], [2], etc.
+  confidence: number;         // 0-1
+}
+
 export type ActionCardType =
   | "upload"
   | "email"
   | "confirm"
   | "link"
-  | "medication_reminder"    // Set a reminder to take a prescribed medication
-  | "appointment_reminder"   // Add a follow-up appointment to calendar + reminder
-  | "referral_followup";     // Help schedule with a referred specialist
+  | "medication_reminder"        // Set a reminder to take a prescribed medication
+  | "medication_reminder_batch"  // Batch: set up all medication reminders at once
+  | "appointment_reminder"       // Add a follow-up appointment to calendar + reminder
+  | "referral_followup";         // Help schedule with a referred specialist
 
 export interface ActionCard {
   id: string;
@@ -48,6 +57,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   jargon_map: JargonMapping[];
+  citations?: Citation[];          // Source-grounded evidence for factual claims
   action_cards?: ActionCard[];
   suggested_replies?: string[];   // Quick-reply pills — stored in DB for history replay
   intent?: IntentType;
@@ -66,8 +76,10 @@ export interface ChatSession {
 export type SSEEvent =
   | { type: "token"; content: string }
   | { type: "jargon_map"; data: JargonMapping[] }
+  | { type: "citations"; data: Citation[] }
   | { type: "suggested_replies"; data: string[] }
   | { type: "action_cards"; data: ActionCard[] }
+  | { type: "session_title"; title: string }
   | { type: "done" }
   | { type: "error"; message: string };
 

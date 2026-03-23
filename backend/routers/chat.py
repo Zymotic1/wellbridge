@@ -125,6 +125,11 @@ async def chat_stream(
         "action_cards": [],
         "suggested_replies": [],
         "refusal_context_facts": [],
+        # Phase 2: multi-agent orchestration
+        "agent_outputs": [],
+        "citations": [],
+        "supervisor_iterations": 0,
+        "supervisor_reasoning": [],
     }
 
     async def event_generator():
@@ -138,6 +143,7 @@ async def chat_stream(
         jargon_map = final_state.get("jargon_map", [])
         action_cards = final_state.get("action_cards", [])
         suggested_replies = final_state.get("suggested_replies", [])
+        citations = final_state.get("citations", [])
 
         # Persist the assistant message before streaming tokens back
         try:
@@ -172,6 +178,7 @@ async def chat_stream(
 
         # Trailing metadata events
         yield f"data: {json.dumps({'type': 'jargon_map', 'data': jargon_map})}\n\n"
+        yield f"data: {json.dumps({'type': 'citations', 'data': citations})}\n\n"
         yield f"data: {json.dumps({'type': 'action_cards', 'data': action_cards})}\n\n"
         yield f"data: {json.dumps({'type': 'suggested_replies', 'data': suggested_replies})}\n\n"
 

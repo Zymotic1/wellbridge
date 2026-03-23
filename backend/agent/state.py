@@ -76,8 +76,33 @@ class ActionCard(TypedDict):
     payload: dict         # Type-specific data (email template, link href, etc.)
 
 
+class Citation(TypedDict):
+    """
+    Links a factual claim in the response back to a specific record and quote.
+    Built by specialist nodes, validated by the Validator, numbered by the synthesizer.
+    """
+    source_record_id: str     # UUID of patient_records row
+    source_quote: str         # Exact text from the record that supports this claim
+    claim_text: str           # The claim in the response this citation supports
+    citation_index: int       # [1], [2], etc. — assigned by response_synthesizer
+    confidence: float         # 0-1, how certain the agent is about this claim
+
+
+class AgentOutput(TypedDict):
+    """
+    Collected output from a single specialist agent dispatch within the Supervisor loop.
+    Multiple AgentOutputs may be merged by the response_synthesizer.
+    """
+    agent_name: str           # Which specialist produced this (e.g., "note_explainer")
+    raw_response: str         # The agent's raw LLM output
+    jargon_entries: list      # Jargon entries from this agent
+    citations: list           # list[Citation] — source-grounded claims
+    records_used: list        # Record IDs this agent referenced
+    action_cards: list        # Action cards from this agent
+
+
 class AgentState(MessagesState):
-    # ---- Routing (set by intent_classifier, never modified after) ----
+    # ---- Routing (set by safety_gate / intent_classifier) ----
     intent: Optional[IntentType]
     confidence: float
 
@@ -107,5 +132,10 @@ class AgentState(MessagesState):
     suggested_replies: list        # list[str] — AI-generated quick-reply pills (ephemeral, not persisted)
 
     # ---- Refusal context ----
-    # Documented facts from patient's own records shown alongside refusal
     refusal_context_facts: list    # list[str]
+
+    # ---- Multi-agent orchestration (Phase 2) ----
+    agent_outputs: list            # list[AgentOutput] — collected by Supervisor
+    citations: list                # list[Citation] — built by response_synthesizer
+    supervisor_iterations: int     # How many Supervisor loop passes ran
+    supervisor_reasoning: list     # list[str] — audit trail of Supervisor decisions
