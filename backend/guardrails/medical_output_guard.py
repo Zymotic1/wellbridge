@@ -33,24 +33,37 @@ SAFE_FALLBACK = (
 # Each tuple: (compiled_regex, human_readable_name_for_logging)
 # ---------------------------------------------------------------------------
 _RAW_PATTERNS: list[tuple[str, str]] = [
+    # Direct advice from WellBridge as if it were a doctor
     (r"\bI diagnose\b",                             "I_diagnose"),
     (r"\bI recommend\b",                            "I_recommend"),
-    (r"\bI suggest\b",                              "I_suggest"),
+    (r"\bI suggest you\b",                          "I_suggest"),
     (r"\btry this instead\b",                       "try_this_instead"),
+    (r"\bI (would|will|can) prescribe\b",           "prescribe"),
+
+    # Prescriptive directives aimed at the patient's specific situation
+    # "you should take" = advice; "it is commonly taken as" = factual
     (r"\byou (should|must|need to) (take|stop|start|avoid|use)\b",
                                                     "prescriptive_should"),
+
+    # Diagnostic assertions
     (r"\bThis (indicates|suggests|means) you have\b",
                                                     "diagnostic_this_indicates"),
     (r"\bYou (likely|probably|definitely) have\b",  "you_likely_have"),
     (r"\bYour condition is\b",                      "your_condition_is"),
-    (r"\bI (would|will|can) prescribe\b",           "prescribe"),
     (r"\byou are (likely|probably) (developing|experiencing)\b",
                                                     "you_are_developing"),
-    (r"\b(cut out|stop eating|avoid eating)\b",     "dietary_advice"),
-    (r"\btake (\d+\s*)?(mg|milligram|tablet|pill|dose)\b",
-                                                    "dosage_recommendation"),
-    (r"\bseek (immediate|emergency|urgent) (medical )?(help|care|attention)\b",
-                                                    "emergency_directive"),
+
+    # REMOVED: "dietary_advice" — was catching FDA food interaction warnings
+    #   ("avoid eating grapefruit") which are standard public safety info.
+    # REMOVED: "dosage_recommendation" — was catching factual drug descriptions
+    #   ("commonly taken as a 5mg tablet") alongside actual dosage advice.
+    #   The prescriptive_should pattern above catches "you should take 5mg".
+    # REMOVED: "emergency_directive" — was catching legitimate safety info
+    #   from clinical notes ("seek medical attention if you experience...").
+
+    # Prognosis / fortune-telling about the patient's health
+    (r"\byou (will|won't|are going to) (recover|die|get worse|get better)\b",
+                                                    "prognosis_prediction"),
 ]
 
 COMPILED_PATTERNS: list[tuple[re.Pattern, str]] = [
