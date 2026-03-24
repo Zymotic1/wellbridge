@@ -368,6 +368,7 @@ async def delete_session(
 async def upload_note(
     session_id: str,
     file: UploadFile = File(...),
+    intent: str = "analyze",     # "analyze" | "ask_questions" | "store_only"
     ctx: TenantContext = Depends(get_tenant_context),
 ):
     """
@@ -414,39 +415,15 @@ async def upload_note(
                        "Please try a different file or type out the contents instead.",
             )
 
-        # ── Step 2: Analyze the note with GPT-4o ────────────────────────────
-        log.info("upload_note: step 2 — running GPT-4o note analysis")
-        try:
-            analysis = await analyze_note(note_text)
-            log.info(
-                "upload_note: analysis done — %d prescriptions, %d appointments, %d referrals",
-                len(analysis.prescriptions),
-                len(analysis.follow_up_appointments),
-                len(analysis.referrals),
-            )
-        except Exception as exc:
-            log.error("upload_note: analyze_note error — %s", exc, exc_info=True)
-            raise
-
-        action_cards = build_action_cards(analysis)
-        suggested_replies = build_upload_suggestions(analysis)
-
-        # ── Step 3: Store the full note as a patient_record ──────────────────
-        log.info("upload_note: step 3 — storing clinical_note in patient_records")
-        # Use admin client — get_scoped_client() may not set RLS session vars
-        # correctly in all auth configurations (dev mode / JWT path). The admin
-        # client bypasses RLS; security is enforced by the explicit tenant_id
-        # and patient_user_id values in the insert payload below.
+        # ── Step 2: Store the document (always, regardless of intent) ─────────
+        log.info("upload_note: step 2 — storing clinical_note in patient_records")
         db = get_admin_client()
-
-        # Generate embedding for semantic search (non-blocking on failure)
-        log.info("upload_note: step 3a — generating content embedding")
         content_to_store = note_text[:10000]
+
         try:
             embedding = await get_embedding(content_to_store)
         except Exception:
             embedding = []
-        log.info("upload_note: embedding dims=%d", len(embedding))
 
         try:
             insert_payload: dict = {
@@ -462,24 +439,98 @@ async def upload_note(
 
             record_result = db.table("patient_records").insert(insert_payload).execute()
             record_id = record_result.data[0]["id"] if record_result.data else None
-            log.info("upload_note: stored patient_record id=%s (embedding=%s)",
-                     record_id, "yes" if embedding else "no")
+            log.info("upload_note: stored patient_record id=%s", record_id)
         except Exception as exc:
             log.error("upload_note: patient_records insert error — %s", exc, exc_info=True)
             raise
 
-        # ── Step 4: Update Journey (medications + appointments, deduped) ──────
-        log.info("upload_note: step 4 — updating journey")
+        # ── Intent: store_only — just save, no analysis ──────────────────────
+        if intent == "store_only":
+            summary_text = (
+                f"I've saved **{filename}** to your records. "
+                "It's now available for me to reference whenever you have questions. "
+                "Just ask me anything about it whenever you're ready."
+            )
+            try:
+                db.table("chat_messages").insert({
+                    "session_id": session_id,
+                    "tenant_id": ctx.tenant_id,
+                    "role": "assistant",
+                    "content": summary_text,
+                    "jargon_map": [],
+                    "intent": "RECORD_COLLECTION",
+                }).execute()
+            except Exception:
+                pass
+
+            return {
+                "message": summary_text,
+                "jargon_map": [],
+                "action_cards": [],
+                "suggested_replies": [
+                    "Can you explain what's in that document?",
+                    "What medications are mentioned?",
+                    "Help me prepare questions for my next visit",
+                ],
+                "record_id": record_id,
+            }
+
+        # ── Step 3: Run full analysis (for analyze and ask_questions intents) ─
+        log.info("upload_note: step 3 — running note analysis")
+        try:
+            analysis = await analyze_note(note_text)
+            log.info(
+                "upload_note: analysis done — %d prescriptions, %d appointments, %d referrals",
+                len(analysis.prescriptions),
+                len(analysis.follow_up_appointments),
+                len(analysis.referrals),
+            )
+        except Exception as exc:
+            log.error("upload_note: analyze_note error — %s", exc, exc_info=True)
+            raise
+
+        action_cards = build_action_cards(analysis)
+        suggested_replies = build_upload_suggestions(analysis)
+
+        # ── Step 4: Update Journey (medications + appointments) ───────────────
+        journey_result = {}
         try:
             journey_result = await update_journey_from_analysis(analysis, ctx)
-            log.info("upload_note: journey updated — %s", journey_result)
         except Exception as exc:
-            log.warning("upload_note: journey update failed (non-blocking) — %s", exc, exc_info=True)
-            journey_result = {}  # Non-blocking
+            log.warning("upload_note: journey update failed (non-blocking) — %s", exc)
+
+        # ── Intent: ask_questions — brief overview, invite questions ──────────
+        if intent == "ask_questions":
+            summary_text = (
+                f"I've saved **{filename}** and had a look through it. "
+                f"I can see it covers "
+            )
+            topics = []
+            if analysis.prescriptions:
+                topics.append(f"{len(analysis.prescriptions)} medication(s)")
+            if analysis.follow_up_appointments:
+                topics.append(f"{len(analysis.follow_up_appointments)} follow-up appointment(s)")
+            if analysis.referrals:
+                topics.append(f"{len(analysis.referrals)} referral(s)")
+            if not topics:
+                topics.append("clinical information")
+            summary_text += ", ".join(topics) + ".\n\n"
+            summary_text += "What would you like to know about it? You can ask me anything — for example:\n"
+            summary_text += "• \"What medications are listed?\"\n"
+            summary_text += "• \"Explain this to me in plain language\"\n"
+            summary_text += "• \"What should I ask my doctor about this?\""
+
+            suggested_replies = [
+                "Explain this document to me",
+                "What medications are listed?",
+                "Help me prepare questions for my doctor",
+            ]
+
+        else:
+            # ── Intent: analyze (default) — full summary ─────────────────────
+            summary_text = analysis.summary
 
         # ── Step 5: Store the summary as an assistant message ─────────────────
-        log.info("upload_note: step 5 — storing assistant summary message")
-        summary_text = analysis.summary
         try:
             db.table("chat_messages").insert({
                 "session_id": session_id,
@@ -492,9 +543,9 @@ async def upload_note(
                 "suggested_replies": suggested_replies,
             }).execute()
         except Exception as exc:
-            log.warning("upload_note: chat_messages insert failed (non-blocking) — %s", exc)
+            log.warning("upload_note: chat_messages insert failed — %s", exc)
 
-        # ── Step 6: Build jargon_map for the summary ──────────────────────────
+        # ── Step 6: Build jargon_map ──────────────────────────────────────────
         jargon_map = []
         lower_summary = summary_text.lower()
         for entry in analysis.jargon_entries:
@@ -510,7 +561,6 @@ async def upload_note(
                 "char_offset_end": idx + len(entry.term),
             })
 
-        log.info("upload_note: complete — returning response")
         return {
             "message": summary_text,
             "jargon_map": jargon_map,

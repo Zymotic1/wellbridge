@@ -69,6 +69,8 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
   const [showEpicModal, setShowEpicModal] = useState(false);
   // Long-text detection prompt
   const [showLongTextPrompt, setShowLongTextPrompt] = useState(false);
+  // File upload intent dialog — holds the file until the user chooses what to do
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // Voice input state
   type MicPermission = "unknown" | "checking" | "granted" | "denied" | "unavailable";
@@ -548,17 +550,37 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
     }, 0);
   }, [isStreaming, sessionId]);
 
-  const handleUpload = useCallback(async (file: File) => {
-    // Upload the file directly in the chat session and show the result here
+  const handleUpload = useCallback(async (file: File, uploadIntent?: string) => {
     setIsStreaming(true);
     setStreamingContent("");
     setLatestSuggestedReplies([]);
+    setPendingFile(null);
     thinkingPhraseRef.current = 0;
-    setThinkingPhrase("Reading your document...");
+    setThinkingPhrase(
+      uploadIntent === "store_only" ? "Saving your document..." : "Reading your document..."
+    );
+
+    // Show the user what they chose in the chat
+    const intentLabels: Record<string, string> = {
+      analyze: "Analyze this document and explain it to me",
+      ask_questions: "I have questions about this document",
+      store_only: "Save this for my records",
+    };
+    if (uploadIntent && intentLabels[uploadIntent]) {
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: `📎 ${file.name}\n${intentLabels[uploadIntent]}`,
+        jargon_map: [],
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+    }
 
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (uploadIntent) formData.append("intent", uploadIntent);
 
       const res = await fetch(`/api/chat/sessions/${sessionId}/upload`, {
         method: "POST",
@@ -701,6 +723,75 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
           </button>
         </div>
 
+        {/* File upload intent dialog — user chooses what to do with the file */}
+        {pendingFile && (
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
+                <Paperclip size={18} className="text-brand-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 truncate">{pendingFile.name}</p>
+                <p className="text-xs text-slate-400">
+                  {(pendingFile.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <button
+                onClick={() => setPendingFile(null)}
+                aria-label="Cancel upload"
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <span className="text-lg leading-none">&times;</span>
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 font-medium">
+              What would you like to do with this document?
+            </p>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => handleUpload(pendingFile, "analyze")}
+                className="w-full text-left px-4 py-3 rounded-xl border border-slate-200
+                           hover:border-brand-300 hover:bg-brand-50 transition-colors group"
+              >
+                <p className="text-sm font-semibold text-slate-800 group-hover:text-brand-700">
+                  Analyze and explain to me
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  I'll read through it and explain everything in plain language
+                </p>
+              </button>
+
+              <button
+                onClick={() => handleUpload(pendingFile, "ask_questions")}
+                className="w-full text-left px-4 py-3 rounded-xl border border-slate-200
+                           hover:border-brand-300 hover:bg-brand-50 transition-colors group"
+              >
+                <p className="text-sm font-semibold text-slate-800 group-hover:text-brand-700">
+                  I have questions about this
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Save it and let me ask you questions about the contents
+                </p>
+              </button>
+
+              <button
+                onClick={() => handleUpload(pendingFile, "store_only")}
+                className="w-full text-left px-4 py-3 rounded-xl border border-slate-200
+                           hover:border-slate-300 hover:bg-slate-50 transition-colors group"
+              >
+                <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-700">
+                  Just save it to my records
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Store it for future reference — I can look at it later
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Long-text clinical note detection prompt */}
         {showLongTextPrompt && (
           <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs">
@@ -734,7 +825,7 @@ export default function ChatWindow({ sessionId, openerMessage, onTitleUpdate }: 
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) handleUpload(file);
+              if (file) setPendingFile(file);
               e.target.value = "";
             }}
           />
